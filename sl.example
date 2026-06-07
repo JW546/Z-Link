@@ -1,0 +1,53 @@
+# 合规广域链路配置示例
+#
+# 说明：
+# 1. 国内比赛/论文默认不要把 COMPLIANT_BACKBONE 写成可部署依赖。
+# 2. 推荐把广域链路抽象为 CompliantBackbone，按环境选择 5G-A 专网、DDS Router、
+#    国产低轨卫星互联网预留接口或北斗短报文应急链路。
+# 3. 若未来在境外合规环境验证 COMPLIANT_BACKBONE，可保留旧适配器作为可插拔实验模块，
+#    但不进入中国区默认演示链路。
+
+# ========== 合规广域链路 ==========
+
+hcp.global.backbone.enabled=true
+
+# china-competition-safe: 国内竞赛/论文默认策略
+# overseas-lab: 境外合规实验策略
+backbone.policy=china-competition-safe
+
+# 主链路：近场自治与编队控制优先
+ground.backbone.primary=adhoc-mesh
+
+# 备链路：城市场景和运营商/校园专网覆盖优先
+ground.backbone.secondary=v2x-5g
+
+# 广域桥接：跨域感知/控制流
+ground.backbone.wan-bridge=dds-router
+
+# 国产低轨卫星互联网预留接口，仅表达“可替换链路抽象”，不绑定具体未获授权服务
+satcom.cn-leo.enabled=false
+satcom.cn-leo.role=reserved-interface
+
+# 北斗短报文仅建议承载低频告警、位置摘要和最小控制意图，不承载高带宽感知流
+beidou.short-message.enabled=false
+beidou.short-message.role=emergency-minimal-alert
+
+# ========== COMPLIANT_BACKBONE 兼容实验开关 ==========
+
+COMPLIANT_BACKBONE.run.mode=mock
+COMPLIANT_BACKBONE.backbone.role=disabled
+COMPLIANT_BACKBONE.policy.cn=disabled
+hcp.COMPLIANT_BACKBONE.enabled=false
+
+# ========== HCP/TCL 协同策略开关 ==========
+
+hcp.mode.enabled=true
+hcp.tcl.semantic.enabled=true
+
+# 协同意图关键词（英文逗号分隔）
+hcp.intent.coordination.keywords=协同,联动,跨品牌,跨域,全域调度,卫星互联网,低轨卫星,北斗短报文,5G专网,控制中心调度
+
+# QoS 与遥测节奏
+backbone.qos.global=reliable_transient_local
+backbone.qos.sensor=best_effort_sensor_stream
+backbone.telemetry.interval=5

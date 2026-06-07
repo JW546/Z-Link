@@ -1,0 +1,33 @@
+# Local secrets and machine-specific configuration
+.env
+.env.*
+!.env.example
+frontend/amap.config.json
+
+# Dependencies and bundled runtimes
+node_modules/
+frontend/node_modules/
+runtime/
+
+# Build and generated output
+*.class
+build-classes/
+utility-classes/
+generated-java/
+generated-src/
+dsl-output/
+artifacts/
+frontend/dist/
+frontend/tsconfig.tsbuildinfo
+
+# Logs and temporary files
+*.log
+~$*
+*.tmp
+*.temp
+
+# Editor and OS metadata
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db

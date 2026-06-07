@@ -1,0 +1,19 @@
+category,metric,symbol,formula,source,meaning
+communication,DDS delivery ratio,Delivery Ratio,delivered/published,VirtualDDSScenarioDemo;RouteFusionExperiment,Topic messages delivered to subscribers
+communication,drop ratio,Drop Ratio,dropped/published,VirtualDDSScenarioDemo,Wireless loss impact on collaboration
+communication,retry count,Retry Count,count(reliable retransmission),VirtualDDSScenarioDemo;RouteFusionExperiment,Reliable QoS overhead
+communication,stale count,Stale Count,count(latency_ms > deadline_ms),RouteFusionExperiment,Advice arriving too late for decision
+communication,average latency,Avg Latency,sum(latency_ms)/delivered,RouteFusionExperiment,Communication timeliness
+collaboration,advice arrival ratio,Advice Arrival Ratio,delivered_advice/total_advice,RouteFusionExperiment,Valid device advice received by fusion agent
+collaboration,device participation,Device Participation,active_sources/all_sources,VirtualDDSScenarioDemo,Number of collaborating devices
+collaboration,route stability,Route Stability,agree_with_final_route/delivered_advice,RouteFusionExperiment,Agreement between final route and delivered advice
+collaboration,conflict level,Conflict Level,NONE/MODERATE/HIGH,Experiment config,Advice conflict strength
+decision,final route,Final Route,fusion output route id,VirtualDDSScenarioDemo;RouteFusionExperiment,Selected route
+decision,risk score,Risk Score,weighted multi-source route risk,RouteFusionExperiment,Lower is safer
+decision,confidence,Confidence,weighted confidence with latency decay,RouteFusionExperiment,Trust level of final route
+decision,replan triggered,Replan Triggered,route_changed?,VirtualDDSScenarioDemo,Whether route is replanned
+decision,risk reduction,Risk Reduction,(baseline_risk-fused_risk)/baseline_risk,Comparative experiment,Collaboration benefit
+system,end-to-end latency,E2E Latency,final_decision_time-intent_time,Future log analysis,Closed-loop speed
+system,IDL coverage,Interface Coverage,defined_idl_types/required_message_types,idl/urban_intent_collaboration.idl,Message interface completeness
+system,autonomy ratio,Autonomy Ratio,vehicle_self_decision_cases/total_cases,Scenario logs,Non-control-center autonomy
+system,reproducible cases,Reproducible Cases,qos_count*latency_count*conflict_count,RouteFusionExperiment,Current value is 18

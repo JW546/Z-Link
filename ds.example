@@ -1,0 +1,36 @@
+# DeepSeek LLM configuration example
+# Copy this file to deepseek.properties and fill in your real values.
+
+# ------------------------------------------------------------
+# 推荐：Qwen（千问）兼容 OpenAI 端点
+# ------------------------------------------------------------
+# qwen.enabled=true
+# qwen.apiKey=your_dashscope_api_key
+# qwen.baseUrl=https://dashscope.aliyuncs.com/compatible-mode/v1
+# qwen.model=qwen-plus
+
+# Enable DeepSeek integration
+# deepseek.enabled=false
+
+# OpenAI-compatible DeepSeek API key
+# You can also use env var DEEPSEEK_API_KEY
+# deepseek.apiKey=your_deepseek_api_key
+
+# Base URL for the OpenAI-compatible endpoint
+# deepseek.baseUrl=https://api.deepseek.com
+
+# Model name
+# deepseek.model=deepseek-chat
+
+# Sampling settings
+# deepseek.temperature=0.2
+# deepseek.maxTokens=512
+
+# Timeout in milliseconds
+# deepseek.timeoutMillis=12000
+
+# Minimum confidence required before DeepSeek may override a weak local intent
+# deepseek.adoptConfidenceThreshold=0.55
+
+# Optional system prompt for the model
+# deepseek.systemPrompt=你是无人车、无人机与合规广域链路协同系统的决策增强模型。

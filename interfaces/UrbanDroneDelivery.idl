@@ -1,0 +1,118 @@
+// UrbanDroneDelivery.idl - 城际无人机配送扩展类型
+// 补充车辆(V2X)和无人机协同场景的数据类型
+
+module urban {
+
+    // 枚举：通信协议类型
+    enum ProtocolType {
+        MAVLINK,
+        DDS_STANDARD,
+        BYD_PROTOCOL,
+        DJI_PROTOCOL,
+        CAN_BUS,
+        V2X
+    };
+
+    // 结构：V2X车辆数据 (用于车机协同)
+    struct VehicleData {
+        @Key string<32> vehicle_id;
+        
+        // 位置
+        double latitude;
+        double longitude;
+        double altitude;
+        
+        // 运动状态
+        double speed;           // m/s
+        double heading;         // degrees
+        double acceleration;   // m/s²
+        
+        // 车辆状态
+        long battery_level;   // 0-100%
+        string<32> drive_mode; // 智能驾驶模式
+        
+        // 时间戳
+        long timestamp;
+    };
+
+    // 结构：协议转换日志
+    struct ProtocolConversionLog {
+        @Key long log_id;
+        
+        string<32> source_protocol;
+        string<32> target_protocol;
+        
+        string<256> original_data;
+        string<256> converted_data;
+        
+        long conversion_time_ms;
+        boolean success;
+        
+        long timestamp;
+    };
+
+    // 结构：环境感知数据
+    struct EnvironmentPerception {
+        @Key string<32> drone_id;
+        
+        // 天气信息
+        double temperature;    // 摄氏度
+        double wind_speed;      // m/s
+        double visibility;      // 米
+        
+        // 气流数据
+        double turbulence_level; // 0-1
+        
+        // 光照条件
+        long illumination;      // lux
+        
+        // 时间戳
+        long timestamp;
+    };
+
+    // 枚举：预警级别 (需在module级别定义)
+    enum AlertLevel { LOW, MEDIUM, HIGH, CRITICAL };
+
+    // 结构：应急预警
+    struct EmergencyAlert {
+        @Key long alert_id;
+        
+        // 预警级别
+        AlertLevel level;
+        
+        // 预警类型
+        string<64> alert_type;    // weather_disaster, road_block, traffic_accident
+        
+        // 位置影响范围
+        double latitude;
+        double longitude;
+        double affected_radius; // 米
+        
+        // 建议
+        string<256> recommendation;
+        
+        long timestamp;
+        long expire_time;
+    };
+
+    // 结构：多无人机协同任务
+    struct SwarmMission {
+        @Key string<64> mission_id;
+        
+        long team_size;
+        
+        // 领队无人机
+        string<32> leader_drone_id;
+        
+        // 任务类型
+        string<32> mission_type;
+        
+        // 编队配置
+        sequence<string, 20> drone_ids;
+        
+        // 目标路径
+        string<512> waypoints;    // JSON格式
+        
+        long timestamp;
+    };
+};

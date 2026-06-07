@@ -1,0 +1,137 @@
+// EmergencyStatus.idl - 应急医疗物资配送状态
+// 用于重庆山地应急医疗物资无人机协同配送系统
+// 对应 DDS-Standard v2.0 规范
+
+module chongqing {
+
+    // 枚举：设备类型
+    enum DeviceType {
+        DRONE_VTOL,
+        DRONE_MULTIROTOR,
+        VEHICLE_CAR,
+        VEHICLE_TRUCK
+    };
+
+    // 枚举：任务类型
+    enum MissionType {
+        MEDICAL_SUPPLY_DELIVERY,
+        EMERGENCY_RESCUE,
+        SURVEILLANCE_PATROL,
+        CARGO_TRANSPORT
+    };
+
+    // 枚举：状态码
+    enum StatusCode {
+        IDLE,
+        MISSION_PLANNED,
+        IN_TRANSIT,
+        ARRIVED,
+        RETURNING,
+        EMERGENCY,
+        ERROR
+    };
+
+    // 结构：三维坐标
+    struct Position3D {
+        double latitude;      // 纬度 (-90~90)
+        double longitude;     // 经度 (-180~180)
+        double altitude;     // 高度 (米)
+    };
+
+    // 结构：应急状态数据 (核心类型)
+    struct EmergencyStatus {
+        // 键字段 - 用于主题查找
+        @Key string<32> drone_id;
+        
+        // 基本信息
+        DeviceType device_type;
+        MissionType mission_type;
+        StatusCode status;
+        
+        // 位置信息
+        Position3D current_position;
+        double speed;           // m/s
+        double heading;         // 度 (0-360)
+        
+        // 电量信息
+        double battery_level;  // 0-100%
+        double power_consumption; // W
+        
+        // 载荷信息
+        @Optional double payload_weight; // kg
+        @Optional string<64> cargo_type;
+        
+        // 时间戳
+        long timestamp_sec;
+        long timestamp_usec;
+        
+        // 优先级
+        long priority;         // 1-10, 10为最高
+        
+        // 目标位置
+        @Optional Position3D target_position;
+        @Optional string<128> destination;
+    };
+
+    // 结构：无人机位置更新
+    struct DronePosition {
+        @Key string<32> drone_id;
+        Position3D position;
+        double velocity_north;   // 北向速度 m/s
+        double velocity_east;    // 东向速度 m/s
+        double speed_ground;     // 地速 m/s
+        double course;         // 航向角 degrees
+        long timestamp;
+    };
+
+    // 结构：任务指令
+    struct MissionCommand {
+        @Key string<32> command_id;
+        @Key string<32> drone_id;
+        
+        MissionType mission_type;
+        string<256> parameters;     // JSON格式参数
+        long priority;
+        long valid_until;           // 过期时间戳
+        
+        // 指令来源
+        string<64> source_system;
+        string<64> operator_id;
+    };
+
+    // 结构：载荷数据
+    struct CargoPayload {
+        @Key string<32> cargo_id;
+        @Key string<32> drone_id;
+        
+        double weight;             // kg
+        string<64> cargo_type;
+        double volume;           // m³
+        
+        // 温控要求
+        @Optional double temperature_min;  // 摄氏度
+        @Optional double temperature_max;
+        
+        // 状态
+        boolean is_hazardous;
+        boolean requires_fridge;
+        
+        long timestamp;
+    };
+
+    // 结构：交通流量数据 (用于车机协同)
+    struct TrafficFlow {
+        @Key string<32> zone_id;
+        
+        long vehicle_count;
+        double average_speed;
+        double congestion_level;  // 0-1
+        
+        // 位置范围
+        double latitude;
+        double longitude;
+        double radius;           // 米
+        
+        long timestamp;
+    };
+};
