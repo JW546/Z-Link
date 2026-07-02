@@ -217,6 +217,7 @@ export interface PlanResult {
   executionStatus?: string;
   executionTimeline?: ExecutionTimelineEvent[];
   timelineSummary?: Record<string, unknown>;
+  dashboardTrace?: Record<string, unknown>;
 }
 
 export interface TopicItem {

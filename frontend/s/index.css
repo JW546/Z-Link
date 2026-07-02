@@ -1778,6 +1778,207 @@ pre {
   font-size: 13px;
 }
 
+.autonomyDashboard {
+  display: grid;
+  gap: 18px;
+}
+
+.dashboardFlow {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.dashboardFlow span {
+  min-height: 46px;
+  display: grid;
+  place-items: center;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--tile-bg);
+  color: var(--body-copy);
+  text-align: center;
+  font-size: 12px;
+}
+
+.dashboardTwoCol,
+.agentProcessGrid,
+.decisionExplainGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.dashboardBlock,
+.decisionExplainGrid article {
+  min-width: 0;
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--inner-card-bg);
+}
+
+.dashboardBlock h4,
+.agentProcessGroup h5 {
+  margin: 0;
+}
+
+.dashboardLeadText {
+  margin: 0;
+  font-size: 18px;
+  line-height: 1.6;
+  color: var(--body-copy);
+}
+
+.dashboardJsonPreview {
+  max-height: 260px;
+  min-height: 180px;
+}
+
+.insightGrid {
+  display: grid;
+  grid-template-columns: minmax(110px, 0.35fr) minmax(0, 1fr);
+  gap: 8px 12px;
+  align-items: start;
+}
+
+.insightGrid span,
+.dashboardNote,
+.agentProcessCard small,
+.metricBarRow small,
+.optimizationGrid small,
+.replanTimelineGrid small,
+.ddsTimelineGrid small {
+  color: var(--text-soft);
+}
+
+.insightGrid strong,
+.decisionExplainGrid strong {
+  overflow-wrap: anywhere;
+}
+
+.ddsTimelineGrid,
+.replanTimelineGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 10px;
+}
+
+.ddsTimelineGrid article,
+.replanTimelineGrid article,
+.agentProcessCard,
+.comparisonTable article,
+.optimizationGrid > div {
+  min-width: 0;
+  display: grid;
+  gap: 6px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--tile-bg);
+}
+
+.ddsTimelineGrid span,
+.replanTimelineGrid span {
+  color: var(--accent);
+  font-weight: 800;
+}
+
+.ddsTimelineGrid p,
+.replanTimelineGrid p,
+.agentProcessCard p,
+.comparisonTable p,
+.dashboardBlock p,
+.decisionExplainGrid p {
+  margin: 0;
+  line-height: 1.5;
+  color: var(--body-copy);
+}
+
+.agentProcessGroup {
+  min-width: 0;
+  display: grid;
+  gap: 10px;
+}
+
+.agentProcessCard div:first-child,
+.comparisonTable article {
+  align-items: start;
+}
+
+.agentProcessCard div:first-child {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.agentProcessCard span {
+  color: var(--accent-2);
+  overflow-wrap: anywhere;
+}
+
+.comparisonTable {
+  display: grid;
+  gap: 10px;
+}
+
+.comparisonTable article span {
+  color: var(--accent-2);
+  overflow-wrap: anywhere;
+}
+
+.decisionExplainGrid article {
+  min-height: 140px;
+}
+
+.decisionExplainGrid small {
+  color: var(--text-soft);
+}
+
+.decisionExplainGrid strong {
+  font-size: 22px;
+}
+
+.optimizationGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.optimizationGrid strong,
+.optimizationGrid span {
+  overflow-wrap: anywhere;
+}
+
+.metricBars {
+  display: grid;
+  gap: 10px;
+}
+
+.metricBarRow {
+  display: grid;
+  grid-template-columns: minmax(130px, 0.45fr) minmax(0, 1fr) 48px;
+  gap: 10px;
+  align-items: center;
+}
+
+.metricTrack {
+  height: 10px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: var(--progress-track);
+}
+
+.metricTrack span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--accent), var(--accent-2));
+}
+
 .guideDots {
   display: flex;
   gap: 8px;
@@ -1837,7 +2038,12 @@ pre {
   .collaborationGrid,
   .decisionBanner,
   .loopTimeline,
-  .twoColumnSection {
+  .twoColumnSection,
+  .dashboardFlow,
+  .dashboardTwoCol,
+  .agentProcessGrid,
+  .decisionExplainGrid,
+  .optimizationGrid {
     grid-template-columns: 1fr;
   }
 

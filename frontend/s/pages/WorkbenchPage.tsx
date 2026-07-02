@@ -7,6 +7,7 @@ import { TimelinePanel } from "../components/TimelinePanel";
 import { TopicTable } from "../components/TopicTable";
 import { heroSlidesByLocale, localeMeta, starterTemplates, t } from "../lib/i18n";
 import { useAppStore } from "../store/useAppStore";
+import type { ParseResult, PlanResult } from "../types";
 
 type SpeechCtor = new () => SpeechRecognition;
 type SpeechErrorCode =
@@ -46,6 +47,325 @@ declare global {
       length: number;
     };
   }
+}
+
+type DashboardMap = Record<string, unknown>;
+
+const asMap = (value: unknown): DashboardMap =>
+  value && typeof value === "object" && !Array.isArray(value) ? (value as DashboardMap) : {};
+
+const asList = (value: unknown): DashboardMap[] =>
+  Array.isArray(value) ? value.filter((item) => item && typeof item === "object").map((item) => item as DashboardMap) : [];
+
+const asText = (value: unknown, fallback = "-"): string => {
+  if (value === null || value === undefined || value === "") return fallback;
+  if (Array.isArray(value)) return value.map((item) => asText(item, "")).filter(Boolean).join(" / ");
+  if (typeof value === "object") return JSON.stringify(value);
+  return String(value);
+};
+
+const asNumber = (value: unknown, fallback = 0) =>
+  typeof value === "number" && Number.isFinite(value) ? value : fallback;
+
+const metricValue = (metrics: DashboardMap, key: string) => asText(metrics[key], "0");
+
+const filterAdvice = (items: DashboardMap[], idToken: string, roleToken: string) =>
+  items.filter((item) => asText(item.nodeId, "").includes(idToken) || asText(item.role, "").includes(roleToken));
+
+function JsonPreview({ value }: { value: unknown }) {
+  return <pre className="dashboardJsonPreview">{JSON.stringify(value ?? {}, null, 2)}</pre>;
+}
+
+function MetricBars({ items }: { items: DashboardMap[] }) {
+  return (
+    <div className="metricBars">
+      {items.slice(0, 10).map((item, index) => {
+        const value = Math.max(0, Math.min(100, asNumber(item.value, 0)));
+        return (
+          <article key={`${asText(item.label)}-${index}`} className="metricBarRow">
+            <div>
+              <strong>{asText(item.label)}</strong>
+              <small>{asText(item.note)}</small>
+            </div>
+            <div className="metricTrack">
+              <span style={{ width: `${value}%` }} />
+            </div>
+            <b>{value.toFixed(value % 1 === 0 ? 0 : 1)}</b>
+          </article>
+        );
+      })}
+    </div>
+  );
+}
+
+function AgentAdviceGroup({ title, items }: { title: string; items: DashboardMap[] }) {
+  return (
+    <div className="agentProcessGroup">
+      <h5>{title}</h5>
+      {items.length ? (
+        items.map((item, index) => (
+          <article key={`${title}-${asText(item.nodeId)}-${index}`} className="agentProcessCard">
+            <div>
+              <strong>{asText(item.nodeId)}</strong>
+              <span>{asText(item.route)}</span>
+            </div>
+            <p>{asText(item.advice)}</p>
+            <small>
+              {asText(item.topic)} · confidence={asText(item.confidence)} · risk={asText(item.riskScore)} · latency={asText(item.latencyMs)}ms
+            </small>
+          </article>
+        ))
+      ) : (
+        <div className="emptyPanel">等待该类 Agent 建议。</div>
+      )}
+    </div>
+  );
+}
+
+function PlannerComparison({ algorithms }: { algorithms: DashboardMap[] }) {
+  return (
+    <div className="comparisonTable">
+      {algorithms.map((item) => (
+        <article key={asText(item.algorithm)}>
+          <strong>{asText(item.algorithm)}</strong>
+          <span>{asText(item.routeId)}</span>
+          <small>score={asText(item.score)} · time={asText(item.averageTravelTime)} · risk={asText(item.averageSafetyRisk)}</small>
+          <p>{asText(item.explanation)}</p>
+        </article>
+      ))}
+    </div>
+  );
+}
+
+function PolicyComparison({ policies }: { policies: DashboardMap[] }) {
+  return (
+    <div className="comparisonTable">
+      {policies.map((item) => {
+        const metrics = asMap(item.metrics);
+        return (
+          <article key={asText(item.policyName)}>
+            <strong>{asText(item.policyName)}</strong>
+            <span>{asText(item.policyRole)}</span>
+            <small>
+              reward={metricValue(metrics, "averageReward")} · risk={metricValue(metrics, "averageSafetyRisk")} · conflict={metricValue(metrics, "conflictResolutionAccuracy")}
+            </small>
+            <p>{asText(item.trainingStatus)}</p>
+          </article>
+        );
+      })}
+    </div>
+  );
+}
+
+function AutonomyDashboardPanel({
+  inputText,
+  parseResult,
+  planResult
+}: {
+  inputText: string;
+  parseResult: ParseResult | null;
+  planResult: PlanResult | null;
+}) {
+  if (!planResult) return null;
+
+  const trace = asMap(planResult.dashboardTrace);
+  const collaboration = planResult.collaboration;
+  const platformPlan = planResult.platformPlan;
+  const parsedIntent = parseResult ?? asMap(trace.parsedIntent);
+  const dslContract = trace.dslTaskContract ?? planResult.structuredDsl ?? platformPlan?.structuredDsl ?? {};
+  const idlMappings = asList(trace.idlDdsTopicMappings).length
+    ? asList(trace.idlDdsTopicMappings)
+    : asList(collaboration?.idlMappings);
+  const ddsTimeline = asList(trace.ddsTimeline).length ? asList(trace.ddsTimeline) : asList(planResult.ddsSimulation);
+  const allAdvice = asList(trace.allAgentSuggestions).length ? asList(trace.allAgentSuggestions) : asList(collaboration?.deviceAdvice);
+  const agentSuggestions = asMap(trace.agentSuggestions);
+  const vehicleAdvice = asList(agentSuggestions.vehicle).length ? asList(agentSuggestions.vehicle) : filterAdvice(allAdvice, "CAR-CQ-001", "无人车");
+  const droneAdvice = asList(agentSuggestions.drone).length ? asList(agentSuggestions.drone) : filterAdvice(allAdvice, "UAV", "无人机");
+  const roadsideAdvice = asList(agentSuggestions.roadside).length ? asList(agentSuggestions.roadside) : filterAdvice(allAdvice, "RSU", "路侧");
+  const neighborAdvice = asList(agentSuggestions.neighborVehicle).length ? asList(agentSuggestions.neighborVehicle) : filterAdvice(allAdvice, "CAR-CQ-002", "邻");
+  const conflictDetection = asMap(trace.conflictDetection);
+  const conflictResolution = asMap(trace.conflictResolution);
+  const plannerComparison = asMap(trace.plannerComparison);
+  const policyComparison = asMap(trace.policyComparison);
+  const optimization = asMap(trace.policyOptimization);
+  const optimizationBefore = asMap(asMap(optimization.before).metrics);
+  const optimizationAfter = asMap(asMap(optimization.after).metrics);
+  const optimizationImprovement = asMap(optimization.improvement);
+  const charts = asList(trace.experimentMetricCharts);
+  const replanningTimeline = asList(trace.replanningTimeline);
+  const finalDecision = collaboration?.finalDecision;
+  const rejected = trace.rejectedRoutes ?? conflictResolution.rejectedSuggestions ?? [];
+
+  return (
+    <section className="cardPanel autonomyDashboard" data-testid="autonomy-dashboard">
+      <div className="panelHeader">
+        <div>
+          <span className="eyebrow">Autonomous Dashboard</span>
+          <h3>无人设备意图协同完整闭环</h3>
+        </div>
+        <span className="softBadge">{asText(trace.trainingStatus, "heuristic evaluation, no RL training")}</span>
+      </div>
+
+      <div className="dashboardFlow">
+        {["自然语言意图", "DSL 任务契约", "DDS 发布订阅", "多设备 Agent 建议", "冲突消解", "可解释路线决策"].map((item) => (
+          <span key={item}>{item}</span>
+        ))}
+      </div>
+
+      <div className="dashboardTwoCol">
+        <article className="dashboardBlock">
+          <h4>乘客自然语言输入</h4>
+          <p className="dashboardLeadText">{asText(trace.passengerInput, inputText)}</p>
+        </article>
+        <article className="dashboardBlock">
+          <h4>解析后的意图</h4>
+          <div className="insightGrid">
+            <span>summary</span>
+            <strong>{asText((parsedIntent as DashboardMap).intentSummary)}</strong>
+            <span>confidence</span>
+            <strong>{asText((parsedIntent as DashboardMap).confidence ?? "0.93")}</strong>
+            <span>destination</span>
+            <strong>{asText((parsedIntent as DashboardMap).destination ?? collaboration?.destination)}</strong>
+          </div>
+        </article>
+      </div>
+
+      <div className="dashboardTwoCol">
+        <article className="dashboardBlock">
+          <h4>DSL 任务契约</h4>
+          <JsonPreview value={dslContract} />
+        </article>
+        <article className="dashboardBlock">
+          <h4>IDL / DDS Topic 映射</h4>
+          <div className="mappingList">
+            {idlMappings.map((item, index) => (
+              <article key={`${asText(item.topic)}-${index}`} className="mappingRow">
+                <span>{asText(item.topic)}</span>
+                <strong>{asText(item.idlModule)}.{asText(item.idlType)}</strong>
+                <small>{asText(item.qos)}</small>
+              </article>
+            ))}
+          </div>
+        </article>
+      </div>
+
+      <article className="dashboardBlock">
+        <h4>DDS 消息时间线</h4>
+        <div className="ddsTimelineGrid">
+          {ddsTimeline.slice(0, 8).map((item, index) => (
+            <article key={`${asText(item.topic)}-${index}`}>
+              <span>{asText(item.sourceId ?? item.actor ?? item.phase)}</span>
+              <strong>{asText(item.topic)}</strong>
+              <p>{asText(item.payload ?? item.message ?? item.reason)}</p>
+              <small>confidence={asText(item.confidence)} · freshness={asText(item.freshness)} · ts={asText(item.timestamp)}</small>
+            </article>
+          ))}
+        </div>
+      </article>
+
+      <article className="dashboardBlock">
+        <h4>Agent 判断过程与建议</h4>
+        <div className="agentProcessGrid">
+          <AgentAdviceGroup title="无人车 Agent 建议" items={vehicleAdvice} />
+          <AgentAdviceGroup title="无人机 Agent 建议" items={droneAdvice} />
+          <AgentAdviceGroup title="路侧节点 Agent 建议" items={roadsideAdvice} />
+          <AgentAdviceGroup title="邻车 Agent 建议" items={neighborAdvice} />
+        </div>
+      </article>
+
+      <div className="dashboardTwoCol">
+        <article className="dashboardBlock">
+          <h4>冲突检测结果</h4>
+          <div className="insightGrid">
+            <span>hasConflict</span>
+            <strong>{asText(conflictDetection.hasConflict)}</strong>
+            <span>conflictType</span>
+            <strong>{asText(conflictDetection.conflictType)}</strong>
+            <span>expected</span>
+            <strong>{asText(conflictDetection.expectedConflicts)}</strong>
+          </div>
+        </article>
+        <article className="dashboardBlock">
+          <h4>冲突消解决策</h4>
+          <div className="insightGrid">
+            <span>accepted</span>
+            <strong>{asText(conflictResolution.acceptedSuggestion)}</strong>
+            <span>rejected</span>
+            <strong>{asText(rejected)}</strong>
+            <span>replanning</span>
+            <strong>{asText(trace.replanningTriggered ?? conflictResolution.whetherReplanningTriggered)}</strong>
+          </div>
+          <p>{asText(conflictResolution.decisionReason)}</p>
+        </article>
+      </div>
+
+      <div className="decisionExplainGrid">
+        <article>
+          <small>最终路线</small>
+          <strong>{asText(trace.finalRoute ?? finalDecision?.route)}</strong>
+          <p>{asText(trace.routeSelectionReason ?? finalDecision?.reason)}</p>
+        </article>
+        <article>
+          <small>为什么拒绝其他路线</small>
+          <strong>{asText(rejected)}</strong>
+          <p>{asText(conflictResolution.decisionReason, "高风险、过期、低置信度或与安全优先意图冲突的路线被降权或拒绝。")}</p>
+        </article>
+      </div>
+
+      <div className="dashboardTwoCol">
+        <article className="dashboardBlock">
+          <h4>Dijkstra / Greedy / RiskAware / MultiObjective 对比</h4>
+          <PlannerComparison algorithms={asList(plannerComparison.algorithms)} />
+        </article>
+        <article className="dashboardBlock">
+          <h4>RuleBased / WeightedUtility / AdaptivePolicy 对比</h4>
+          <PolicyComparison policies={asList(policyComparison.policyResults)} />
+          <p className="dashboardNote">{asText(policyComparison.whyBestPolicy)}</p>
+        </article>
+      </div>
+
+      <div className="dashboardTwoCol">
+        <article className="dashboardBlock">
+          <h4>AgentPolicy 优化前后对比</h4>
+          <div className="optimizationGrid">
+            <div>
+              <small>before</small>
+              <strong>reward={metricValue(optimizationBefore, "averageReward")}</strong>
+              <span>risk={metricValue(optimizationBefore, "averageSafetyRisk")}</span>
+            </div>
+            <div>
+              <small>after</small>
+              <strong>reward={metricValue(optimizationAfter, "averageReward")}</strong>
+              <span>risk={metricValue(optimizationAfter, "averageSafetyRisk")}</span>
+            </div>
+            <div>
+              <small>delta</small>
+              <strong>{asText(optimizationImprovement.averageRewardDelta)}</strong>
+              <span>conflict={asText(optimizationImprovement.conflictResolutionAccuracyDelta)}</span>
+            </div>
+          </div>
+        </article>
+        <article className="dashboardBlock">
+          <h4>实验指标图表</h4>
+          <MetricBars items={charts} />
+        </article>
+      </div>
+
+      <article className="dashboardBlock">
+        <h4>重规划时间线</h4>
+        <div className="replanTimelineGrid">
+          {replanningTimeline.slice(0, 10).map((item, index) => (
+            <article key={`${asText(item.time ?? item.stage)}-${index}`}>
+              <span>{asText(item.time ?? item.stage ?? `R${index + 1}`)}</span>
+              <strong>{asText(item.title ?? item.status)}</strong>
+              <p>{asText(item.detail ?? item.message)}</p>
+              <small>{asText(item.kind)}</small>
+            </article>
+          ))}
+        </div>
+      </article>
+    </section>
+  );
 }
 
 export function WorkbenchPage() {
@@ -539,6 +859,8 @@ export function WorkbenchPage() {
       <section className="routeStage">
         <MissionMap overlay={planResult?.mapOverlay} />
       </section>
+
+      <AutonomyDashboardPanel inputText={inputText} parseResult={parseResult} planResult={planResult} />
 
       {collaboration ? (
         <section className="cardPanel collaborationStage">

@@ -16,7 +16,7 @@ export function LoginPage() {
 
   const [mode, setMode] = useState<"login" | "register">("login");
   const [username, setUsername] = useState("admin");
-  const [password, setPassword] = useState("admin123");
+  const [password, setPassword] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [email, setEmail] = useState("");
   const [organization, setOrganization] = useState("");

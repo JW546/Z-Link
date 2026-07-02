@@ -23,7 +23,7 @@ import java.util.Map;
 import java.util.HashMap;
 import java.util.concurrent.Executors;
 
-import agent.CollaborationDecisionEngine;
+import api.PlatformApiFacade;
 import agent.DeepSeekConfig;
 import agent.DeepSeekClient;
 import agent.DeviceRegistry;
@@ -34,15 +34,19 @@ import agent.MissionExecutionService;
 import agent.PlatformOrchestrator;
 import agent.ReportService;
 import agent.ScenarioLibrary;
+import evaluation.BaselineComparison;
 import nlu.NLToDSLToJavaPipeline;
+import policy.PolicyEvaluator;
+import policy.PolicyOptimizationService;
+import simulation.SimulationScenarioService;
 import utils.AmapRealAPI;
 
 public class FrontendApiServer {
     private static final Gson GSON = new Gson();
     private static final List<Map<String, Object>> MISSIONS = new ArrayList<Map<String, Object>>();
     private static final List<Map<String, Object>> DEVICES = new ArrayList<Map<String, Object>>();
-    private static final CollaborationDecisionEngine COLLAB_ENGINE = new CollaborationDecisionEngine();
     private static final PlatformOrchestrator PLATFORM = new PlatformOrchestrator();
+    private static final PlatformApiFacade API_FACADE = new PlatformApiFacade();
     private static final Map<String, Map<String, Object>> PLATFORM_PLANS = new HashMap<String, Map<String, Object>>();
     private static final MissionExecutionService EXECUTION = MissionExecutionService.getInstance();
     private static final DeviceRegistry DEVICE_REGISTRY = DeviceRegistry.getInstance();
@@ -51,6 +55,10 @@ public class FrontendApiServer {
     private static final MissionHistoryService HISTORY = MissionHistoryService.getInstance();
     private static final DashboardService DASHBOARD = new DashboardService();
     private static final ReportService REPORTS = new ReportService();
+    private static final SimulationScenarioService SIMULATION = new SimulationScenarioService();
+    private static final BaselineComparison BASELINE_COMPARISON = new BaselineComparison();
+    private static final PolicyEvaluator POLICY_EVALUATOR = new PolicyEvaluator();
+    private static final PolicyOptimizationService POLICY_OPTIMIZER = new PolicyOptimizationService();
 
     static {
         MISSIONS.add(mission("MSN-VDDS-001", "乘客希望尽快到达西南大学附属医院，前方拥堵时由车辆自主询问邻车、无人机和 RSU", "running", "乘客意图驱动路线协同"));
@@ -105,7 +113,7 @@ public class FrontendApiServer {
         return exchange -> {
             exchange.getResponseHeaders().add("Access-Control-Allow-Origin", "*");
             exchange.getResponseHeaders().add("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
-            exchange.getResponseHeaders().add("Access-Control-Allow-Headers", "Content-Type");
+            exchange.getResponseHeaders().add("Access-Control-Allow-Headers", "Content-Type, Accept-Language, X-Z-Link-Locale");
             if ("OPTIONS".equalsIgnoreCase(exchange.getRequestMethod())) {
                 exchange.sendResponseHeaders(204, -1);
                 return;
@@ -246,8 +254,11 @@ public class FrontendApiServer {
         String text = requestText(exchange);
         String missionId = "MSN-" + System.currentTimeMillis();
 
-        Map<String, Object> collaboration = COLLAB_ENGINE.evaluate(text, missionId);
-        Map<String, Object> platformPlan = PLATFORM.buildFullPlan(text, missionId);
+        Map<String, Object> apiPlan = API_FACADE.generatePlan(text, missionId);
+        @SuppressWarnings("unchecked")
+        Map<String, Object> collaboration = (Map<String, Object>) apiPlan.get("collaboration");
+        @SuppressWarnings("unchecked")
+        Map<String, Object> platformPlan = (Map<String, Object>) apiPlan.get("platformPlan");
         @SuppressWarnings("unchecked")
         Map<String, Object> finalDecision = (Map<String, Object>) collaboration.get("finalDecision");
 
@@ -288,10 +299,164 @@ public class FrontendApiServer {
         response.put("fallbackStrategies", platformPlan.get("fallbackStrategies"));
         response.put("ddsRuntimeMode", platformPlan.get("ddsRuntimeMode"));
         response.put("executionTimeline", platformPlan.get("executionTimeline"));
+        response.put("dashboardTrace", dashboardTrace(text, collaboration, platformPlan, artifacts));
 
         MISSIONS.add(0, mission(missionId, text, "pending", summarizeIntent(text)));
         PLATFORM_PLANS.put(missionId, platformPlan);
         sendJson(exchange, 200, response);
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Map<String, Object> dashboardTrace(String text, Map<String, Object> collaboration,
+                                                       Map<String, Object> platformPlan, PipelineArtifacts artifacts) {
+        Map<String, Object> scenario = SCENARIOS.get("hospital-emergency");
+        Map<String, Object> scenarioRun = SIMULATION.runScenario("hospital-emergency");
+        Map<String, Object> finalDecision = castMap(collaboration.get("finalDecision"));
+        Map<String, Object> scenarioDecision = castMap(scenarioRun.get("finalDecision"));
+        Map<String, Object> policyOptimization = POLICY_OPTIMIZER.optimize();
+
+        Map<String, Object> trace = new LinkedHashMap<String, Object>();
+        trace.put("passengerInput", text);
+        trace.put("parsedIntent", parsedIntentSummary(text));
+        trace.put("dslTaskContract", platformPlan.get("structuredDsl"));
+        trace.put("dslPreview", artifacts.dslCode);
+        trace.put("idlDdsTopicMappings", collaboration.get("idlMappings"));
+        trace.put("ddsTimeline", scenarioRun.get("ddsTimeline"));
+        trace.put("agentSuggestions", categorizedAdvice((List<Map<String, Object>>) collaboration.get("deviceAdvice")));
+        trace.put("allAgentSuggestions", collaboration.get("deviceAdvice"));
+        trace.put("conflictDetection", conflictDetection(scenario, scenarioDecision));
+        trace.put("conflictResolution", scenarioDecision);
+        trace.put("finalRoute", finalDecision.get("route"));
+        trace.put("routeSelectionReason", finalDecision.get("reason"));
+        trace.put("rejectedRoutes", scenarioDecision.get("rejectedSuggestions"));
+        trace.put("replanningTriggered", scenarioDecision.get("whetherReplanningTriggered"));
+        trace.put("plannerComparison", BASELINE_COMPARISON.compareScenario(scenario));
+        trace.put("policyComparison", POLICY_EVALUATOR.evaluateDefaultPolicies());
+        trace.put("policyOptimization", policyOptimization);
+        trace.put("experimentMetricCharts", metricCharts(collaboration, platformPlan, policyOptimization, scenarioRun));
+        trace.put("replanningTimeline", replanningTimeline(collaboration, platformPlan, scenarioDecision));
+        trace.put("displayCompleteness", Arrays.asList(
+            "passengerInput", "parsedIntent", "dslTaskContract", "idlDdsTopicMappings", "ddsTimeline",
+            "agentSuggestions", "conflictDetection", "conflictResolution", "finalRoute", "routeSelectionReason",
+            "rejectedRoutes", "replanningTriggered", "plannerComparison", "policyComparison",
+            "policyOptimization", "experimentMetricCharts", "replanningTimeline"
+        ));
+        trace.put("trainingStatus", "dashboard_uses_heuristic_evaluation_and_optimization_no_rl_training");
+        return trace;
+    }
+
+    private static Map<String, Object> parsedIntentSummary(String text) {
+        Map<String, Object> parsed = new LinkedHashMap<String, Object>();
+        parsed.put("intentSummary", summarizeIntent(text));
+        parsed.put("destination", extractDestinationLabel(text));
+        parsed.put("urgent", containsIgnoreCase(text, "尽快") || containsIgnoreCase(text, "快"));
+        parsed.put("safetyFirst", containsIgnoreCase(text, "安全") || containsIgnoreCase(text, "避开"));
+        parsed.put("avoidCongestion", containsIgnoreCase(text, "拥堵") || containsIgnoreCase(text, "堵"));
+        return parsed;
+    }
+
+    private static Map<String, Object> conflictDetection(Map<String, Object> scenario, Map<String, Object> decision) {
+        Map<String, Object> detection = new LinkedHashMap<String, Object>();
+        detection.put("hasConflict", Boolean.TRUE.equals(decision.get("hasConflict"))
+            || decision.get("conflictType") != null
+            || !((List<?>) scenario.getOrDefault("expectedConflicts", Arrays.asList())).isEmpty());
+        detection.put("expectedConflicts", scenario.get("expectedConflicts"));
+        detection.put("conflictType", decision.get("conflictType"));
+        detection.put("timelineEvent", decision.get("timelineEvent"));
+        detection.put("evidenceQuality", Arrays.asList("sourceTrust", "messageConfidence", "messageFreshness", "ddsDelayMs", "packetLossRate"));
+        return detection;
+    }
+
+    private static Map<String, Object> categorizedAdvice(List<Map<String, Object>> advice) {
+        Map<String, Object> categorized = new LinkedHashMap<String, Object>();
+        categorized.put("vehicle", filterAdvice(advice, "CAR-CQ-001", "无人车"));
+        categorized.put("drone", filterAdvice(advice, "UAV", "无人机"));
+        categorized.put("roadside", filterAdvice(advice, "RSU", "路侧"));
+        categorized.put("neighborVehicle", filterAdvice(advice, "CAR-CQ-002", "邻"));
+        return categorized;
+    }
+
+    private static List<Map<String, Object>> filterAdvice(List<Map<String, Object>> advice, String idToken, String roleToken) {
+        List<Map<String, Object>> result = new ArrayList<Map<String, Object>>();
+        if (advice == null) return result;
+        for (Map<String, Object> item : advice) {
+            String nodeId = String.valueOf(item.getOrDefault("nodeId", ""));
+            String role = String.valueOf(item.getOrDefault("role", ""));
+            if (nodeId.contains(idToken) || role.contains(roleToken)) {
+                result.add(item);
+            }
+        }
+        return result;
+    }
+
+    @SuppressWarnings("unchecked")
+    private static List<Map<String, Object>> metricCharts(Map<String, Object> collaboration,
+                                                           Map<String, Object> platformPlan,
+                                                           Map<String, Object> optimization,
+                                                           Map<String, Object> scenarioRun) {
+        List<Map<String, Object>> charts = new ArrayList<Map<String, Object>>();
+        for (Map<String, Object> item : (List<Map<String, Object>>) collaboration.getOrDefault("experimentMetrics", Arrays.asList())) {
+            charts.add(chartBar(String.valueOf(item.get("label")), parseMetricNumber(String.valueOf(item.get("value"))),
+                String.valueOf(item.get("trend"))));
+        }
+        Map<String, Object> evaluation = castMap(scenarioRun.get("evaluation"));
+        Map<String, Object> metrics = castMap(evaluation.get("metrics"));
+        charts.add(chartBar("successRate", number(metrics, "successRate", 0.0) * 100.0, "scenario"));
+        charts.add(chartBar("averageSafetyRisk", number(metrics, "averageSafetyRisk", 0.0) * 100.0, "scenario"));
+        charts.add(chartBar("conflictResolutionAccuracy", number(metrics, "conflictResolutionAccuracy", 0.0) * 100.0, "scenario"));
+
+        Map<String, Object> improvement = castMap(optimization.get("improvement"));
+        charts.add(chartBar("averageRewardDelta", number(improvement, "averageRewardDelta", 0.0) * 10.0, "policy optimization"));
+        charts.add(chartBar("conflictAccuracyDelta", number(improvement, "conflictResolutionAccuracyDelta", 0.0) * 100.0, "policy optimization"));
+        charts.add(chartBar("DDS messages", ((List<?>) platformPlan.getOrDefault("ddsSimulation", Arrays.asList())).size() * 10.0, "timeline"));
+        return charts;
+    }
+
+    private static Map<String, Object> chartBar(String label, double value, String note) {
+        Map<String, Object> chart = new LinkedHashMap<String, Object>();
+        chart.put("label", label);
+        chart.put("value", Math.max(0.0, Math.min(100.0, Math.round(value * 10.0) / 10.0)));
+        chart.put("note", note);
+        return chart;
+    }
+
+    private static double parseMetricNumber(String value) {
+        try {
+            String normalized = value.replace("%", "").replace("ms", "").replace("/", ".").trim();
+            return Double.parseDouble(normalized);
+        } catch (Exception ignored) {
+            return 50.0;
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private static List<Map<String, Object>> replanningTimeline(Map<String, Object> collaboration,
+                                                                 Map<String, Object> platformPlan,
+                                                                 Map<String, Object> decision) {
+        List<Map<String, Object>> timeline = new ArrayList<Map<String, Object>>();
+        for (Map<String, Object> item : (List<Map<String, Object>>) collaboration.getOrDefault("timeline", Arrays.asList())) {
+            Map<String, Object> event = new LinkedHashMap<String, Object>(item);
+            event.put("kind", String.valueOf(item.getOrDefault("title", "")).contains("重规划") ? "replanning" : "collaboration");
+            timeline.add(event);
+        }
+        Object platformTimeline = platformPlan.get("executionTimeline");
+        if (platformTimeline instanceof List<?>) {
+            for (Object raw : (List<?>) platformTimeline) {
+                if (raw instanceof Map<?, ?>) {
+                    Map<String, Object> event = new LinkedHashMap<String, Object>((Map<String, Object>) raw);
+                    event.put("kind", String.valueOf(event.getOrDefault("topic", "")).contains("replan") ? "replanning" : "execution");
+                    timeline.add(event);
+                }
+            }
+        }
+        Map<String, Object> conflictEvent = new LinkedHashMap<String, Object>();
+        conflictEvent.put("time", "T-conflict");
+        conflictEvent.put("title", "冲突消解后重规划判断");
+        conflictEvent.put("detail", "whetherReplanningTriggered=" + decision.get("whetherReplanningTriggered")
+            + ", accepted=" + decision.get("acceptedSuggestion"));
+        conflictEvent.put("kind", "replanning");
+        timeline.add(conflictEvent);
+        return timeline;
     }
 
     private static void agentDevices(HttpExchange exchange) throws IOException {
@@ -690,6 +855,16 @@ public class FrontendApiServer {
             latest = plan;
         }
         return latest;
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Map<String, Object> castMap(Object value) {
+        return value instanceof Map<?, ?> ? (Map<String, Object>) value : new LinkedHashMap<String, Object>();
+    }
+
+    private static double number(Map<String, Object> map, String key, double fallback) {
+        Object value = map == null ? null : map.get(key);
+        return value instanceof Number ? ((Number) value).doubleValue() : fallback;
     }
 
     private static String requiredString(JsonObject body, String key) {

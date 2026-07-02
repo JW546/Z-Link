@@ -64,8 +64,7 @@ const defaultUsers: WorkspaceUser[] = [
     favoriteScene: "城市空地协同",
     securityLevel: "mission-critical",
     createdAt: new Date().toISOString(),
-    isLocalOnly: false,
-    password: "admin123"
+    isLocalOnly: false
   },
   {
     id: "u-operator",
@@ -83,8 +82,7 @@ const defaultUsers: WorkspaceUser[] = [
     favoriteScene: "城市巡检",
     securityLevel: "elevated",
     createdAt: new Date().toISOString(),
-    isLocalOnly: false,
-    password: "operator123"
+    isLocalOnly: false
   },
   {
     id: "u-demo",
@@ -102,8 +100,7 @@ const defaultUsers: WorkspaceUser[] = [
     favoriteScene: "任务演示",
     securityLevel: "standard",
     createdAt: new Date().toISOString(),
-    isLocalOnly: false,
-    password: "demo123"
+    isLocalOnly: false
   }
 ];
 
@@ -222,7 +219,7 @@ const mergeUsers = (users: WorkspaceUser[], locale: LocaleCode) => {
   [...defaultUsers, ...users].forEach((user) => {
     map.set(user.username.toLowerCase(), {
       ...normalizeUser(user, locale),
-      password: user.password ?? defaultUsers.find((item) => item.username === user.username)?.password
+      password: user.isLocalOnly ? user.password : undefined
     });
   });
   return Array.from(map.values());
@@ -456,13 +453,13 @@ export const useAppStore = create<AppState>((set, get) => ({
       let profile: WorkspaceUser;
       let authToken = "";
 
-      if (existing?.password === password) {
+      if (existing?.isLocalOnly && existing.password === password) {
         profile = { ...existing };
-        authToken = existing.isLocalOnly ? `local-${existing.username}-${Date.now()}` : "";
+        authToken = `local-${existing.username}-${Date.now()}`;
       } else {
         const result = await backend.login(username, password);
         authToken = result.token;
-        profile = buildLocalProfile(result.user, existing, get().preferences.locale, existing?.password);
+        profile = buildLocalProfile(result.user, existing, get().preferences.locale, existing?.isLocalOnly ? existing.password : undefined);
       }
 
       const users = mergeUsers([

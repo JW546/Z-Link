@@ -16,6 +16,11 @@ import type {
 
 const useMock = import.meta.env.VITE_USE_MOCK === "true";
 const allowFallbackMock = import.meta.env.VITE_ALLOW_API_FALLBACK_MOCK !== "false";
+const demoCredentials: Record<string, string> = {
+  admin: "admin123",
+  operator: "operator123",
+  demo: "demo123"
+};
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL || "/api",
   timeout: 20000
@@ -538,16 +543,21 @@ export const backend = {
       async () => (await api.post("/auth/login", { username, password })).data,
       async () => {
         await sleep(220);
+        const normalizedLogin = username.trim().toLowerCase();
+        const passwordMatchesDemoAccount = demoCredentials[normalizedLogin] === password;
         if (!username.trim() || !password.trim()) {
           throw new Error(localize("用户名和密码不能为空。", "Username and password are required."));
+        }
+        if (!passwordMatchesDemoAccount) {
+          throw new Error(localize("用户名或密码错误。", "Invalid username or password."));
         }
         return {
           ok: true,
           message: localize("已通过演示通道登录。", "Signed in through the demo channel."),
           token: `mock-session-${Date.now()}`,
           user: {
-            id: `u-${username}`,
-            username,
+            id: `u-${normalizedLogin}`,
+            username: normalizedLogin,
             displayName: localize(`指挥员 ${username}`, `Commander ${username}`),
             role: "mission-commander",
             permissions: ["mission:write", "dds:publish", "device:dispatch", "capability:run"]
