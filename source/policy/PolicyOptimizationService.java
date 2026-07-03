@@ -18,7 +18,7 @@ public class PolicyOptimizationService {
     public AgentPolicy chooseBest(List<AgentPolicy> candidates, RewardFunction rewardFunction,
                                   List<AgentState> validationStates) {
         if (candidates == null || candidates.isEmpty()) {
-            return state -> new AgentAction("HOLD", "route_A_main_road");
+            return state -> new AgentAction("HOLD", "");
         }
         PolicyEvaluator evaluator = new PolicyEvaluator();
         AgentPolicy best = candidates.get(0);

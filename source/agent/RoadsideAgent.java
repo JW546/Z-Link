@@ -1,7 +1,6 @@
 package agent;
 
 import dds.VirtualDDSMessageBus;
-import policy.AgentState;
 import policy.WeightedAgentPolicy;
 
 import java.util.Arrays;
@@ -18,12 +17,6 @@ public class RoadsideAgent extends AutonomousAgent {
 
     protected String publishTopic() {
         return VirtualDDSMessageBus.TOPIC_ROADSIDE_RISK_EVENT;
-    }
-
-    protected String chooseRoute(String policyRoute, AgentState state) {
-        return state.localRisk > 0.50 || state.passengerSafetyFirst
-            ? "route_B_school_zone_slow_safe"
-            : "route_D_emergency_green_wave";
     }
 
     protected double roleRiskBias() {

@@ -57,7 +57,7 @@ public class RuleBasedAgentPolicy implements AgentPolicy {
     }
 
     private String firstCandidate(AgentState state) {
-        return state.candidateRoutes.isEmpty() ? "route_A_main_road" : state.candidateRoutes.get(0);
+        return state.candidateRoutes.isEmpty() ? "" : state.candidateRoutes.get(0);
     }
 
     private double number(Map<String, Object> map, String key, double fallback) {

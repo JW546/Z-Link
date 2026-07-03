@@ -302,6 +302,7 @@ interface AppState {
   conversation: ChatMessage[];
   wsConnected: boolean;
   demoMode: boolean;
+  debugMode: boolean;
   authToken: string;
   currentUser: WorkspaceUser | null;
   users: WorkspaceUser[];
@@ -315,6 +316,7 @@ interface AppState {
   addConversation: (message: Omit<ChatMessage, "id" | "createdAt">) => void;
   setWsConnected: (value: boolean) => void;
   setDemoMode: (value: boolean) => void;
+  setDebugMode: (value: boolean) => void;
   setInputText: (value: string) => void;
   setLocale: (locale: LocaleCode) => void;
   setThemeMode: (themeMode: ThemeMode) => void;
@@ -361,6 +363,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   ],
   wsConnected: false,
   demoMode: false,
+  debugMode: false,
   authToken: normalizedSavedSession?.token ?? "",
   currentUser: normalizedSessionUser ?? null,
   users: initialUsers,
@@ -389,6 +392,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   setWsConnected: (value) => set({ wsConnected: value }),
   setDemoMode: (value) => set({ demoMode: value }),
+  setDebugMode: (value) => set({ debugMode: value }),
   setInputText: (value) => set({ inputText: value }),
 
   setLocale: (locale) =>

@@ -1,13 +1,10 @@
-import { useEffect, useRef, useState } from "react";
-import { AssistantAvatar } from "../components/AssistantAvatar";
+import { useEffect, useMemo, useRef, useState } from "react";
+import type { ReactNode } from "react";
 import { backend } from "../api/adapter";
-import { HeroCarousel } from "../components/HeroCarousel";
 import { MissionMap } from "../components/MissionMap";
-import { TimelinePanel } from "../components/TimelinePanel";
-import { TopicTable } from "../components/TopicTable";
-import { heroSlidesByLocale, localeMeta, starterTemplates, t } from "../lib/i18n";
+import { localeMeta, starterTemplates, t } from "../lib/i18n";
 import { useAppStore } from "../store/useAppStore";
-import type { ParseResult, PlanResult } from "../types";
+import type { PlanResult } from "../types";
 
 type SpeechCtor = new () => SpeechRecognition;
 type SpeechErrorCode =
@@ -18,6 +15,7 @@ type SpeechErrorCode =
   | "not-allowed"
   | "service-not-allowed"
   | string;
+type DashboardMap = Record<string, unknown>;
 
 declare global {
   interface Window {
@@ -49,8 +47,6 @@ declare global {
   }
 }
 
-type DashboardMap = Record<string, unknown>;
-
 const asMap = (value: unknown): DashboardMap =>
   value && typeof value === "object" && !Array.isArray(value) ? (value as DashboardMap) : {};
 
@@ -67,89 +63,168 @@ const asText = (value: unknown, fallback = "-"): string => {
 const asNumber = (value: unknown, fallback = 0) =>
   typeof value === "number" && Number.isFinite(value) ? value : fallback;
 
-const metricValue = (metrics: DashboardMap, key: string) => asText(metrics[key], "0");
+const percent = (value: unknown) => `${Math.round(asNumber(value, 0) * 100)}%`;
 
-const filterAdvice = (items: DashboardMap[], idToken: string, roleToken: string) =>
-  items.filter((item) => asText(item.nodeId, "").includes(idToken) || asText(item.role, "").includes(roleToken));
+const short = (value: unknown, max = 120) => {
+  const text = asText(value);
+  return text.length > max ? `${text.slice(0, max)}...` : text;
+};
 
-function JsonPreview({ value }: { value: unknown }) {
-  return <pre className="dashboardJsonPreview">{JSON.stringify(value ?? {}, null, 2)}</pre>;
+function StatusBadge({ tone = "neutral", children }: { tone?: "neutral" | "good" | "warn" | "danger"; children: ReactNode }) {
+  return <span className={`cockpitBadge ${tone}`}>{children}</span>;
 }
 
-function MetricBars({ items }: { items: DashboardMap[] }) {
+function MetricCard({ label, value, note, tone = "neutral" }: { label: string; value: string | number; note?: string; tone?: "neutral" | "good" | "warn" | "danger" }) {
   return (
-    <div className="metricBars">
-      {items.slice(0, 10).map((item, index) => {
-        const value = Math.max(0, Math.min(100, asNumber(item.value, 0)));
-        return (
-          <article key={`${asText(item.label)}-${index}`} className="metricBarRow">
-            <div>
-              <strong>{asText(item.label)}</strong>
-              <small>{asText(item.note)}</small>
-            </div>
-            <div className="metricTrack">
-              <span style={{ width: `${value}%` }} />
-            </div>
-            <b>{value.toFixed(value % 1 === 0 ? 0 : 1)}</b>
-          </article>
-        );
-      })}
-    </div>
+    <article className={`metricCard ${tone}`}>
+      <span>{label}</span>
+      <strong>{value}</strong>
+      {note ? <small>{note}</small> : null}
+    </article>
   );
 }
 
-function AgentAdviceGroup({ title, items }: { title: string; items: DashboardMap[] }) {
+function JsonInspector({ value, title = "原始 JSON" }: { value: unknown; title?: string }) {
   return (
-    <div className="agentProcessGroup">
-      <h5>{title}</h5>
-      {items.length ? (
-        items.map((item, index) => (
-          <article key={`${title}-${asText(item.nodeId)}-${index}`} className="agentProcessCard">
-            <div>
-              <strong>{asText(item.nodeId)}</strong>
-              <span>{asText(item.route)}</span>
-            </div>
-            <p>{asText(item.advice)}</p>
-            <small>
-              {asText(item.topic)} · confidence={asText(item.confidence)} · risk={asText(item.riskScore)} · latency={asText(item.latencyMs)}ms
-            </small>
-          </article>
-        ))
-      ) : (
-        <div className="emptyPanel">等待该类 Agent 建议。</div>
-      )}
-    </div>
+    <details className="jsonInspector">
+      <summary>{title}</summary>
+      <pre>{JSON.stringify(value ?? {}, null, 2)}</pre>
+    </details>
   );
 }
 
-function PlannerComparison({ algorithms }: { algorithms: DashboardMap[] }) {
+function WorkflowStepper({ replanning }: { replanning: boolean }) {
+  const steps = ["乘客意图", "DSL 任务契约", "DDS 发布订阅", "Agent 建议", "冲突消解", "最终决策", replanning ? "重规划/评估" : "策略评估"];
   return (
-    <div className="comparisonTable">
-      {algorithms.map((item) => (
-        <article key={asText(item.algorithm)}>
-          <strong>{asText(item.algorithm)}</strong>
-          <span>{asText(item.routeId)}</span>
-          <small>score={asText(item.score)} · time={asText(item.averageTravelTime)} · risk={asText(item.averageSafetyRisk)}</small>
-          <p>{asText(item.explanation)}</p>
+    <section className="workflowStepper" aria-label="任务闭环 Timeline">
+      {steps.map((step, index) => (
+        <article key={step}>
+          <span>{String(index + 1).padStart(2, "0")}</span>
+          <strong>{step}</strong>
         </article>
       ))}
-    </div>
+    </section>
   );
 }
 
-function PolicyComparison({ policies }: { policies: DashboardMap[] }) {
+function MissionInputPanel({
+  inputText,
+  setInputText,
+  selectedTemplate,
+  setSelectedTemplate,
+  onVoice,
+  voiceState,
+  voiceMessage,
+  onAnalyze,
+  onExecute,
+  loading,
+  executing,
+  hasPlan
+}: {
+  inputText: string;
+  setInputText: (value: string) => void;
+  selectedTemplate: string;
+  setSelectedTemplate: (value: string) => void;
+  onVoice: () => void;
+  voiceState: string;
+  voiceMessage: string;
+  onAnalyze: () => void;
+  onExecute: () => void;
+  loading: boolean;
+  executing: boolean;
+  hasPlan: boolean;
+}) {
+  const preferences = useAppStore((state) => state.preferences);
+  const locale = preferences.locale;
   return (
-    <div className="comparisonTable">
-      {policies.map((item) => {
-        const metrics = asMap(item.metrics);
+    <section id="mission" className="missionInputPanel cardPanel">
+      <div className="panelHeader">
+        <div>
+          <span className="eyebrow">Mission Input</span>
+          <h3>自然语言任务输入</h3>
+        </div>
+        <StatusBadge tone={hasPlan ? "good" : "warn"}>{hasPlan ? "READY" : "PENDING"}</StatusBadge>
+      </div>
+      <select
+        value={selectedTemplate}
+        onChange={(event) => {
+          setSelectedTemplate(event.target.value);
+          if (event.target.value) setInputText(event.target.value);
+        }}
+      >
+        <option value="">选择演示模板</option>
+        {starterTemplates[locale].map((template) => (
+          <option key={template} value={template}>{template}</option>
+        ))}
+      </select>
+      <textarea className="missionInput cockpitInput" value={inputText} onChange={(event) => setInputText(event.target.value)} />
+      <div className="commandBar">
+        <button onClick={onAnalyze} disabled={loading}>{loading ? "生成中" : "生成协同闭环"}</button>
+        <button className="ghostButton" onClick={onExecute} disabled={executing || !hasPlan}>{executing ? "协同中" : "启动协同"}</button>
+        <button className={voiceState === "listening" ? "ghostButton active" : "ghostButton"} onClick={onVoice}>语音</button>
+        <span className="supportText">{voiceMessage}</span>
+      </div>
+    </section>
+  );
+}
+
+function ScenarioCard({ scenario, onRun }: { scenario: DashboardMap; onRun: (scenario: DashboardMap) => void }) {
+  return (
+    <article className="scenarioCard">
+      <strong>{asText(scenario.name)}</strong>
+      <p>{short(scenario.description, 86)}</p>
+      <small>{asText(scenario.expectedDecisionPrinciple)}</small>
+      <button className="ghostButton" onClick={() => onRun(scenario)}>载入</button>
+    </article>
+  );
+}
+
+function RouteSummaryCard({ trace, finalDecision, conflictResolution }: { trace: DashboardMap; finalDecision: DashboardMap; conflictResolution: DashboardMap }) {
+  const accepted = asMap(conflictResolution.acceptedSuggestion);
+  return (
+    <article className="routeSummaryCard">
+      <span className="eyebrow">Final Decision</span>
+      <h2>{asText(trace.finalRoute ?? finalDecision.route, "等待路线")}</h2>
+      <p>{asText(trace.routeSelectionReason ?? finalDecision.reason, "生成方案后显示决策解释。")}</p>
+      <div className="routeEvidenceStrip">
+        <span>risk {asText(accepted.riskScore ?? finalDecision.riskScore)}</span>
+        <span>confidence {asText(accepted.confidence ?? finalDecision.confidence)}</span>
+        <span>source {asText(accepted.sourceId)}</span>
+      </div>
+    </article>
+  );
+}
+
+function AgentSuggestionCard({ title, items }: { title: string; items: DashboardMap[] }) {
+  return (
+    <section className="agentSuggestionGroup">
+      <h4>{title}</h4>
+      {items.length ? items.slice(0, 3).map((item, index) => (
+        <article key={`${title}-${asText(item.nodeId)}-${index}`} className="agentSuggestionCard">
+          <div>
+            <strong>{asText(item.nodeId)}</strong>
+            <StatusBadge tone={asNumber(item.riskScore, 0.4) > 0.55 ? "danger" : "good"}>risk {asText(item.riskScore)}</StatusBadge>
+          </div>
+          <span>{asText(item.route)}</span>
+          <p>{short(item.advice, 110)}</p>
+          <small>{asText(item.topic)} · confidence {asText(item.confidence)} · {asText(item.latencyMs)}ms</small>
+        </article>
+      )) : <div className="emptyPanel">暂无该类 Agent 建议。</div>}
+    </section>
+  );
+}
+
+function DDSMessageTimeline({ items, compact = false }: { items: DashboardMap[]; compact?: boolean }) {
+  return (
+    <div className={compact ? "ddsMiniTimeline" : "ddsMessageTimeline"}>
+      {items.slice(0, compact ? 4 : 10).map((item, index) => {
+        const payload = asMap(item.payload);
         return (
-          <article key={asText(item.policyName)}>
-            <strong>{asText(item.policyName)}</strong>
-            <span>{asText(item.policyRole)}</span>
-            <small>
-              reward={metricValue(metrics, "averageReward")} · risk={metricValue(metrics, "averageSafetyRisk")} · conflict={metricValue(metrics, "conflictResolutionAccuracy")}
-            </small>
-            <p>{asText(item.trainingStatus)}</p>
+          <article key={`${asText(item.topic)}-${index}`}>
+            <span>{asText(item.sourceId ?? item.actor ?? `DDS-${index + 1}`)}</span>
+            <strong>{asText(item.topic ?? item.phase)}</strong>
+            <p>{short(payload.explanation ?? item.message ?? item.reason ?? payload.route, compact ? 70 : 140)}</p>
+            <small>confidence {asText(item.confidence)} · freshness {asText(item.freshness)} · delay {asText(payload.ddsDelayMs ?? item.latencyMs)}ms</small>
           </article>
         );
       })}
@@ -157,213 +232,167 @@ function PolicyComparison({ policies }: { policies: DashboardMap[] }) {
   );
 }
 
-function AutonomyDashboardPanel({
-  inputText,
-  parseResult,
-  planResult
-}: {
-  inputText: string;
-  parseResult: ParseResult | null;
-  planResult: PlanResult | null;
-}) {
-  if (!planResult) return null;
-
-  const trace = asMap(planResult.dashboardTrace);
-  const collaboration = planResult.collaboration;
-  const platformPlan = planResult.platformPlan;
-  const parsedIntent = parseResult ?? asMap(trace.parsedIntent);
-  const dslContract = trace.dslTaskContract ?? planResult.structuredDsl ?? platformPlan?.structuredDsl ?? {};
-  const idlMappings = asList(trace.idlDdsTopicMappings).length
-    ? asList(trace.idlDdsTopicMappings)
-    : asList(collaboration?.idlMappings);
-  const ddsTimeline = asList(trace.ddsTimeline).length ? asList(trace.ddsTimeline) : asList(planResult.ddsSimulation);
-  const allAdvice = asList(trace.allAgentSuggestions).length ? asList(trace.allAgentSuggestions) : asList(collaboration?.deviceAdvice);
-  const agentSuggestions = asMap(trace.agentSuggestions);
-  const vehicleAdvice = asList(agentSuggestions.vehicle).length ? asList(agentSuggestions.vehicle) : filterAdvice(allAdvice, "CAR-CQ-001", "无人车");
-  const droneAdvice = asList(agentSuggestions.drone).length ? asList(agentSuggestions.drone) : filterAdvice(allAdvice, "UAV", "无人机");
-  const roadsideAdvice = asList(agentSuggestions.roadside).length ? asList(agentSuggestions.roadside) : filterAdvice(allAdvice, "RSU", "路侧");
-  const neighborAdvice = asList(agentSuggestions.neighborVehicle).length ? asList(agentSuggestions.neighborVehicle) : filterAdvice(allAdvice, "CAR-CQ-002", "邻");
-  const conflictDetection = asMap(trace.conflictDetection);
-  const conflictResolution = asMap(trace.conflictResolution);
-  const plannerComparison = asMap(trace.plannerComparison);
-  const policyComparison = asMap(trace.policyComparison);
-  const optimization = asMap(trace.policyOptimization);
-  const optimizationBefore = asMap(asMap(optimization.before).metrics);
-  const optimizationAfter = asMap(asMap(optimization.after).metrics);
-  const optimizationImprovement = asMap(optimization.improvement);
-  const charts = asList(trace.experimentMetricCharts);
-  const replanningTimeline = asList(trace.replanningTimeline);
-  const finalDecision = collaboration?.finalDecision;
-  const rejected = trace.rejectedRoutes ?? conflictResolution.rejectedSuggestions ?? [];
-
+function ConflictResolutionPanel({ detection, resolution, rejected }: { detection: DashboardMap; resolution: DashboardMap; rejected: DashboardMap[] }) {
+  const accepted = asMap(resolution.acceptedSuggestion);
   return (
-    <section className="cardPanel autonomyDashboard" data-testid="autonomy-dashboard">
+    <section id="conflict" className="conflictPanel">
       <div className="panelHeader">
         <div>
-          <span className="eyebrow">Autonomous Dashboard</span>
-          <h3>无人设备意图协同完整闭环</h3>
+          <span className="eyebrow">Conflict Resolver</span>
+          <h3>冲突检测与消解</h3>
         </div>
-        <span className="softBadge">{asText(trace.trainingStatus, "heuristic evaluation, no RL training")}</span>
+        <StatusBadge tone={detection.hasConflict ? "warn" : "good"}>{detection.hasConflict ? "CONFLICT" : "CLEAR"}</StatusBadge>
       </div>
+      <div className="conflictGrid">
+        <article>
+          <small>冲突类型</small>
+          <strong>{asText(detection.conflictType ?? resolution.conflictType)}</strong>
+          <p>{asText(resolution.decisionReason)}</p>
+        </article>
+        <article>
+          <small>采纳建议</small>
+          <strong>{asText(accepted.route)}</strong>
+          <p>{asText(accepted.reason)}</p>
+        </article>
+        <article>
+          <small>拒绝/降权</small>
+          <strong>{rejected.length}</strong>
+          <p>{rejected.map((item) => `${asText(item.route)}: ${asText(item.rejectionReason ?? item.reason)}`).join("；") || "无"}</p>
+        </article>
+      </div>
+    </section>
+  );
+}
 
-      <div className="dashboardFlow">
-        {["自然语言意图", "DSL 任务契约", "DDS 发布订阅", "多设备 Agent 建议", "冲突消解", "可解释路线决策"].map((item) => (
-          <span key={item}>{item}</span>
+function PlannerComparisonPanel({ algorithms }: { algorithms: DashboardMap[] }) {
+  return (
+    <section className="comparisonPanel">
+      <h3>路线规划对比</h3>
+      <div className="plannerRows">
+        {algorithms.map((item) => (
+          <article key={asText(item.algorithm)} className={item.baseline ? "baseline" : "selected"}>
+            <strong>{asText(item.algorithm)}</strong>
+            <span>{asText(item.routeId)}</span>
+            <div>
+              <small>time {asText(item.averageTravelTime)}</small>
+              <small>risk {asText(item.averageSafetyRisk)}</small>
+              <small>score {asText(item.score)}</small>
+            </div>
+            <p>{short(item.explanation, 130)}</p>
+          </article>
         ))}
       </div>
+    </section>
+  );
+}
 
-      <div className="dashboardTwoCol">
-        <article className="dashboardBlock">
-          <h4>乘客自然语言输入</h4>
-          <p className="dashboardLeadText">{asText(trace.passengerInput, inputText)}</p>
-        </article>
-        <article className="dashboardBlock">
-          <h4>解析后的意图</h4>
-          <div className="insightGrid">
-            <span>summary</span>
-            <strong>{asText((parsedIntent as DashboardMap).intentSummary)}</strong>
-            <span>confidence</span>
-            <strong>{asText((parsedIntent as DashboardMap).confidence ?? "0.93")}</strong>
-            <span>destination</span>
-            <strong>{asText((parsedIntent as DashboardMap).destination ?? collaboration?.destination)}</strong>
-          </div>
-        </article>
-      </div>
-
-      <div className="dashboardTwoCol">
-        <article className="dashboardBlock">
-          <h4>DSL 任务契约</h4>
-          <JsonPreview value={dslContract} />
-        </article>
-        <article className="dashboardBlock">
-          <h4>IDL / DDS Topic 映射</h4>
-          <div className="mappingList">
-            {idlMappings.map((item, index) => (
-              <article key={`${asText(item.topic)}-${index}`} className="mappingRow">
-                <span>{asText(item.topic)}</span>
-                <strong>{asText(item.idlModule)}.{asText(item.idlType)}</strong>
-                <small>{asText(item.qos)}</small>
-              </article>
-            ))}
-          </div>
-        </article>
-      </div>
-
-      <article className="dashboardBlock">
-        <h4>DDS 消息时间线</h4>
-        <div className="ddsTimelineGrid">
-          {ddsTimeline.slice(0, 8).map((item, index) => (
-            <article key={`${asText(item.topic)}-${index}`}>
-              <span>{asText(item.sourceId ?? item.actor ?? item.phase)}</span>
-              <strong>{asText(item.topic)}</strong>
-              <p>{asText(item.payload ?? item.message ?? item.reason)}</p>
-              <small>confidence={asText(item.confidence)} · freshness={asText(item.freshness)} · ts={asText(item.timestamp)}</small>
+function PolicyComparisonPanel({ policies, whyBest }: { policies: DashboardMap[]; whyBest?: unknown }) {
+  return (
+    <section id="policy" className="comparisonPanel">
+      <h3>AgentPolicy 评估</h3>
+      <div className="policyRows">
+        {policies.map((item) => {
+          const metrics = asMap(item.metrics);
+          return (
+            <article key={asText(item.policyName)}>
+              <strong>{asText(item.policyName)}</strong>
+              <span>reward {asText(metrics.averageReward)} · risk {asText(metrics.averageSafetyRisk)}</span>
+              <small>conflict {asText(metrics.conflictResolutionAccuracy)} · replan {asText(metrics.replanningCount)}</small>
             </article>
-          ))}
-        </div>
-      </article>
-
-      <article className="dashboardBlock">
-        <h4>Agent 判断过程与建议</h4>
-        <div className="agentProcessGrid">
-          <AgentAdviceGroup title="无人车 Agent 建议" items={vehicleAdvice} />
-          <AgentAdviceGroup title="无人机 Agent 建议" items={droneAdvice} />
-          <AgentAdviceGroup title="路侧节点 Agent 建议" items={roadsideAdvice} />
-          <AgentAdviceGroup title="邻车 Agent 建议" items={neighborAdvice} />
-        </div>
-      </article>
-
-      <div className="dashboardTwoCol">
-        <article className="dashboardBlock">
-          <h4>冲突检测结果</h4>
-          <div className="insightGrid">
-            <span>hasConflict</span>
-            <strong>{asText(conflictDetection.hasConflict)}</strong>
-            <span>conflictType</span>
-            <strong>{asText(conflictDetection.conflictType)}</strong>
-            <span>expected</span>
-            <strong>{asText(conflictDetection.expectedConflicts)}</strong>
-          </div>
-        </article>
-        <article className="dashboardBlock">
-          <h4>冲突消解决策</h4>
-          <div className="insightGrid">
-            <span>accepted</span>
-            <strong>{asText(conflictResolution.acceptedSuggestion)}</strong>
-            <span>rejected</span>
-            <strong>{asText(rejected)}</strong>
-            <span>replanning</span>
-            <strong>{asText(trace.replanningTriggered ?? conflictResolution.whetherReplanningTriggered)}</strong>
-          </div>
-          <p>{asText(conflictResolution.decisionReason)}</p>
-        </article>
+          );
+        })}
       </div>
+      <p className="dashboardNote">{asText(whyBest)}</p>
+    </section>
+  );
+}
 
-      <div className="decisionExplainGrid">
-        <article>
-          <small>最终路线</small>
-          <strong>{asText(trace.finalRoute ?? finalDecision?.route)}</strong>
-          <p>{asText(trace.routeSelectionReason ?? finalDecision?.reason)}</p>
-        </article>
-        <article>
-          <small>为什么拒绝其他路线</small>
-          <strong>{asText(rejected)}</strong>
-          <p>{asText(conflictResolution.decisionReason, "高风险、过期、低置信度或与安全优先意图冲突的路线被降权或拒绝。")}</p>
-        </article>
-      </div>
-
-      <div className="dashboardTwoCol">
-        <article className="dashboardBlock">
-          <h4>Dijkstra / Greedy / RiskAware / MultiObjective 对比</h4>
-          <PlannerComparison algorithms={asList(plannerComparison.algorithms)} />
-        </article>
-        <article className="dashboardBlock">
-          <h4>RuleBased / WeightedUtility / AdaptivePolicy 对比</h4>
-          <PolicyComparison policies={asList(policyComparison.policyResults)} />
-          <p className="dashboardNote">{asText(policyComparison.whyBestPolicy)}</p>
-        </article>
-      </div>
-
-      <div className="dashboardTwoCol">
-        <article className="dashboardBlock">
-          <h4>AgentPolicy 优化前后对比</h4>
-          <div className="optimizationGrid">
-            <div>
-              <small>before</small>
-              <strong>reward={metricValue(optimizationBefore, "averageReward")}</strong>
-              <span>risk={metricValue(optimizationBefore, "averageSafetyRisk")}</span>
-            </div>
-            <div>
-              <small>after</small>
-              <strong>reward={metricValue(optimizationAfter, "averageReward")}</strong>
-              <span>risk={metricValue(optimizationAfter, "averageSafetyRisk")}</span>
-            </div>
-            <div>
-              <small>delta</small>
-              <strong>{asText(optimizationImprovement.averageRewardDelta)}</strong>
-              <span>conflict={asText(optimizationImprovement.conflictResolutionAccuracyDelta)}</span>
-            </div>
-          </div>
-        </article>
-        <article className="dashboardBlock">
-          <h4>实验指标图表</h4>
-          <MetricBars items={charts} />
-        </article>
-      </div>
-
-      <article className="dashboardBlock">
-        <h4>重规划时间线</h4>
-        <div className="replanTimelineGrid">
-          {replanningTimeline.slice(0, 10).map((item, index) => (
-            <article key={`${asText(item.time ?? item.stage)}-${index}`}>
-              <span>{asText(item.time ?? item.stage ?? `R${index + 1}`)}</span>
-              <strong>{asText(item.title ?? item.status)}</strong>
-              <p>{asText(item.detail ?? item.message)}</p>
-              <small>{asText(item.kind)}</small>
+function EvaluationMetricsPanel({ items }: { items: DashboardMap[] }) {
+  return (
+    <section className="evaluationPanel">
+      <h3>实验指标</h3>
+      <div className="metricBars">
+        {items.slice(0, 8).map((item, index) => {
+          const value = Math.max(0, Math.min(100, asNumber(item.value, 0)));
+          return (
+            <article key={`${asText(item.label)}-${index}`} className="metricBarRow">
+              <div>
+                <strong>{asText(item.label)}</strong>
+                <small>{asText(item.note)}</small>
+              </div>
+              <div className="metricTrack"><span style={{ width: `${value}%` }} /></div>
+              <b>{value.toFixed(value % 1 === 0 ? 0 : 1)}</b>
             </article>
-          ))}
-        </div>
-      </article>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+function DetailsTabs({
+  active,
+  setActive,
+  debugMode,
+  sections
+}: {
+  active: string;
+  setActive: (value: string) => void;
+  debugMode: boolean;
+  sections: Record<string, { label: string; content: JSX.Element }>;
+}) {
+  const visibleKeys = Object.keys(sections).filter((key) => debugMode || !["json", "logs"].includes(key));
+  return (
+    <section className="detailsTabs cardPanel">
+      <div className="tabBar">
+        {visibleKeys.map((key) => (
+          <button key={key} className={active === key ? "ghostButton active" : "ghostButton"} onClick={() => setActive(key)}>
+            {sections[key].label}
+          </button>
+        ))}
+      </div>
+      <div className="tabSurface">{sections[visibleKeys.includes(active) ? active : visibleKeys[0]]?.content}</div>
+    </section>
+  );
+}
+
+function DashboardOverview({
+  planResult,
+  dashboard,
+  trace,
+  ddsTimeline,
+  finalDecision,
+  conflictResolution,
+  onlineDevices
+}: {
+  planResult: PlanResult | null;
+  dashboard: DashboardMap;
+  trace: DashboardMap;
+  ddsTimeline: DashboardMap[];
+  finalDecision: DashboardMap;
+  conflictResolution: DashboardMap;
+  onlineDevices: number;
+}) {
+  const accepted = asMap(conflictResolution.acceptedSuggestion);
+  const risk = asNumber(accepted.riskScore ?? finalDecision.riskScore, 0);
+  const riskTone = risk > 0.55 ? "danger" : risk > 0.32 ? "warn" : "good";
+  return (
+    <section id="overview" className="cockpitHero cardPanel">
+      <div className="cockpitHeroMain">
+        <span className="eyebrow">Autonomous Collaboration Command Deck</span>
+        <h1>无人设备自治协同指挥驾驶舱</h1>
+        <p>{asText(trace.routeSelectionReason ?? finalDecision.reason, "输入任务后，系统将展示从自然语言意图到可解释路线决策的完整闭环。")}</p>
+      </div>
+      <div className="cockpitMetricGrid">
+        <MetricCard label="当前任务" value={planResult?.missionId ?? "待生成"} note={asText(planResult?.structuredDsl?.taskType ?? planResult?.platformPlan?.intent?.taskType, "自然语言意图驱动")} />
+        <MetricCard label="最终路线" value={asText(trace.finalRoute ?? finalDecision.route, "待决策")} note="基于风险/置信度/新鲜度" tone="good" />
+        <MetricCard label="风险等级" value={risk ? percent(risk) : "-"} note={risk ? "安全硬约束参与决策" : "等待评估"} tone={riskTone} />
+        <MetricCard label="协同置信度" value={percent(accepted.confidence ?? finalDecision.confidence)} note={asText(accepted.sourceId, "多 Agent 融合")} />
+        <MetricCard label="在线设备数" value={onlineDevices || asText(dashboard.onlineDevices, "-")} note="Vehicle / UAV / RSU / Peer" />
+        <MetricCard label="DDS 消息数" value={ddsTimeline.length || asText(dashboard.recentLogCount, "-")} note="发布订阅时间线" />
+        <MetricCard label="重规划" value={asText(trace.replanningTriggered ?? conflictResolution.whetherReplanningTriggered, "false")} tone={(trace.replanningTriggered ?? conflictResolution.whetherReplanningTriggered) ? "warn" : "good"} />
+        <MetricCard label="当前状态" value={planResult ? "闭环就绪" : "等待输入"} note={asText(planResult?.platformPlan?.executionStatus?.state, "simulation-ready")} />
+      </div>
     </section>
   );
 }
@@ -375,9 +404,10 @@ export function WorkbenchPage() {
   const loading = useAppStore((state) => state.loading);
   const executing = useAppStore((state) => state.executing);
   const devices = useAppStore((state) => state.devices);
-  const conversation = useAppStore((state) => state.conversation);
   const preferences = useAppStore((state) => state.preferences);
-  const currentUser = useAppStore((state) => state.currentUser);
+  const debugMode = useAppStore((state) => state.debugMode);
+  const demoMode = useAppStore((state) => state.demoMode);
+  const streamLogs = useAppStore((state) => state.streamLogs);
   const setInputText = useAppStore((state) => state.setInputText);
   const analyzeAndPlan = useAppStore((state) => state.analyzeAndPlan);
   const executePlan = useAppStore((state) => state.executePlan);
@@ -386,30 +416,19 @@ export function WorkbenchPage() {
   const stopMission = useAppStore((state) => state.stopMission);
   const topicAction = useAppStore((state) => state.topicAction);
 
-  const locale = preferences.locale;
-  const slides = heroSlidesByLocale[locale];
   const recognitionRef = useRef<SpeechRecognition | null>(null);
-  const stoppingVoiceRef = useRef(false);
   const [voiceState, setVoiceState] = useState<"idle" | "listening" | "unsupported">("idle");
-  const [voiceMessage, setVoiceMessage] = useState(
-    t(locale, {
-      "zh-CN": "可直接口述任务。",
-      "en-US": "You can speak the mission directly."
-    })
-  );
-  const [carouselIndex, setCarouselIndex] = useState(0);
+  const [voiceMessage, setVoiceMessage] = useState("可直接口述任务。");
   const [selectedTemplate, setSelectedTemplate] = useState("");
-  const [scenarios, setScenarios] = useState<Record<string, unknown>[]>([]);
-  const [dashboard, setDashboard] = useState<Record<string, unknown>>({});
+  const [scenarios, setScenarios] = useState<DashboardMap[]>([]);
+  const [dashboard, setDashboard] = useState<DashboardMap>({});
+  const [activeTab, setActiveTab] = useState("dsl");
   const [faultType, setFaultType] = useState("DEVICE_OFFLINE");
   const [faultTarget, setFaultTarget] = useState("UAV-CQ-007");
   const [reportMarkdown, setReportMarkdown] = useState("");
+
+  const locale = preferences.locale;
   const speechLang = localeMeta[locale].speechLang;
-  const onlineDevices = devices.filter((device) => device.online);
-  const latestMessages = conversation.slice(-3);
-  const collaboration = planResult?.collaboration;
-  const platformPlan = planResult?.platformPlan;
-  const executionTimeline = planResult?.executionTimeline ?? platformPlan?.executionTimeline ?? [];
 
   useEffect(() => () => recognitionRef.current?.stop(), []);
 
@@ -418,237 +437,74 @@ export function WorkbenchPage() {
     backend.dashboard().then((data) => setDashboard(data.dashboard ?? {})).catch(() => setDashboard({}));
   }, [planResult?.missionId]);
 
-  useEffect(() => {
-    setVoiceMessage(
-      t(locale, {
-        "zh-CN": "可直接口述任务。",
-        "en-US": "You can speak the mission directly."
-      })
-    );
-  }, [locale]);
+  const trace = asMap(planResult?.dashboardTrace);
+  const collaboration = planResult?.collaboration;
+  const platformPlan = planResult?.platformPlan;
+  const finalDecision = asMap(collaboration?.finalDecision);
+  const conflictDetection = asMap(trace.conflictDetection);
+  const conflictResolution = asMap(trace.conflictResolution);
+  const plannerComparison = asMap(trace.plannerComparison);
+  const policyComparison = asMap(trace.policyComparison);
+  const optimization = asMap(trace.policyOptimization);
+  const optimizationBefore = asMap(asMap(optimization.before).metrics);
+  const optimizationAfter = asMap(asMap(optimization.after).metrics);
+  const dslContract = trace.dslTaskContract ?? planResult?.structuredDsl ?? platformPlan?.structuredDsl ?? {};
+  const idlMappings = asList(trace.idlDdsTopicMappings).length ? asList(trace.idlDdsTopicMappings) : asList(collaboration?.idlMappings);
+  const ddsTimeline = asList(trace.ddsTimeline).length ? asList(trace.ddsTimeline) : asList(planResult?.ddsSimulation);
+  const allAdvice = asList(trace.allAgentSuggestions).length ? asList(trace.allAgentSuggestions) : asList(collaboration?.deviceAdvice);
+  const agentSuggestions = asMap(trace.agentSuggestions);
+  const vehicleAdvice = asList(agentSuggestions.vehicle).length ? asList(agentSuggestions.vehicle) : allAdvice.filter((item) => asText(item.nodeId).includes("CAR"));
+  const droneAdvice = asList(agentSuggestions.drone).length ? asList(agentSuggestions.drone) : allAdvice.filter((item) => asText(item.nodeId).includes("UAV"));
+  const roadsideAdvice = asList(agentSuggestions.roadside).length ? asList(agentSuggestions.roadside) : allAdvice.filter((item) => asText(item.nodeId).includes("RSU"));
+  const neighborAdvice = asList(agentSuggestions.neighborVehicle).length ? asList(agentSuggestions.neighborVehicle) : allAdvice.filter((item) => asText(item.role).includes("邻"));
+  const rejectedRoutes = asList(trace.rejectedRoutes).length ? asList(trace.rejectedRoutes) : asList(conflictResolution.rejectedSuggestions);
+  const charts = asList(trace.experimentMetricCharts);
+  const replanningTimeline = asList(trace.replanningTimeline);
+  const onlineDevices = devices.filter((device) => device.online).length;
 
-  const startVoiceInput = () => {
+  const parsedIntent = useMemo(() => parseResult ?? asMap(trace.parsedIntent), [parseResult, trace.parsedIntent]);
+
+  const startVoiceInput = async () => {
     const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-
-    if (!Recognition) {
+    if (!Recognition || !window.isSecureContext) {
       setVoiceState("unsupported");
-      setVoiceMessage(
-        t(locale, {
-          "zh-CN": "当前浏览器不支持语音输入。",
-          "en-US": "This browser does not support voice input."
-        })
-      );
+      setVoiceMessage("当前浏览器环境不支持语音输入。");
       return;
     }
-
-    recognitionRef.current?.stop();
-    const recognition = new Recognition();
-    recognition.lang = speechLang;
-    recognition.continuous = false;
-    recognition.interimResults = true;
-
-    recognition.onresult = (event) => {
-      const transcript = Array.from({ length: event.results.length })
-        .map((_, index) => event.results[index]?.[0]?.transcript ?? "")
-        .join("")
-        .trim();
-
-      if (transcript) {
-        setInputText(transcript);
-      }
-    };
-
-    recognition.onerror = () => {
-      setVoiceState("idle");
-      setVoiceMessage(
-        t(locale, {
-          "zh-CN": "语音输入失败。",
-          "en-US": "Voice input failed."
-        })
-      );
-    };
-
-    recognition.onend = () => {
-      setVoiceState("idle");
-      setVoiceMessage(
-        t(locale, {
-          "zh-CN": "语音输入结束。",
-          "en-US": "Voice capture finished."
-        })
-      );
-    };
-
-    recognitionRef.current = recognition;
-    recognition.start();
-    setVoiceState("listening");
-    setVoiceMessage(
-      t(locale, {
-        "zh-CN": "正在聆听。",
-        "en-US": "Listening."
-      })
-    );
-  };
-
-  const voiceErrorMessage = (error: SpeechErrorCode) => {
-    switch (error) {
-      case "not-allowed":
-      case "service-not-allowed":
-        return t(locale, {
-          "zh-CN": "麦克风权限被拒绝，请在浏览器地址栏允许麦克风后重试。",
-          "en-US": "Microphone permission was blocked. Allow it in the browser address bar and try again."
-        });
-      case "audio-capture":
-        return t(locale, {
-          "zh-CN": "没有检测到可用麦克风，请检查输入设备。",
-          "en-US": "No microphone was detected. Check the input device."
-        });
-      case "no-speech":
-        return t(locale, {
-          "zh-CN": "没有识别到语音，请靠近麦克风再试一次。",
-          "en-US": "No speech was detected. Move closer to the microphone and try again."
-        });
-      case "network":
-        return t(locale, {
-          "zh-CN": "语音识别服务暂时不可用，请检查网络或改用键盘输入。",
-          "en-US": "Speech recognition is temporarily unavailable. Check the network or use keyboard input."
-        });
-      case "aborted":
-        return t(locale, {
-          "zh-CN": "语音输入已停止。",
-          "en-US": "Voice input stopped."
-        });
-      default:
-        return t(locale, {
-          "zh-CN": "语音输入失败，请检查浏览器、麦克风和权限。",
-          "en-US": "Voice input failed. Check the browser, microphone, and permissions."
-        });
-    }
-  };
-
-  const stopVoiceInput = () => {
-    stoppingVoiceRef.current = true;
-    recognitionRef.current?.stop();
-    setVoiceState("idle");
-    setVoiceMessage(
-      t(locale, {
-        "zh-CN": "语音输入已停止。",
-        "en-US": "Voice input stopped."
-      })
-    );
-  };
-
-  const startStableVoiceInput = async () => {
-    if (voiceState === "listening") {
-      stopVoiceInput();
-      return;
-    }
-
-    const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!Recognition) {
-      setVoiceState("unsupported");
-      setVoiceMessage(
-        t(locale, {
-          "zh-CN": "当前浏览器不支持语音输入，请使用新版 Edge 或 Chrome。",
-          "en-US": "This browser does not support voice input. Use a recent Edge or Chrome."
-        })
-      );
-      return;
-    }
-
-    if (!window.isSecureContext) {
-      setVoiceState("unsupported");
-      setVoiceMessage(
-        t(locale, {
-          "zh-CN": "语音输入需要 localhost/127.0.0.1 或 HTTPS 环境。",
-          "en-US": "Voice input requires localhost, 127.0.0.1, or HTTPS."
-        })
-      );
-      return;
-    }
-
-    if (!navigator.mediaDevices?.getUserMedia) {
-      setVoiceState("unsupported");
-      setVoiceMessage(
-        t(locale, {
-          "zh-CN": "当前系统没有可用的浏览器麦克风接口。",
-          "en-US": "The browser microphone API is unavailable on this system."
-        })
-      );
-      return;
-    }
-
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      stream.getTracks().forEach((track) => track.stop());
-    } catch {
-      setVoiceState("idle");
-      setVoiceMessage(voiceErrorMessage("not-allowed"));
-      return;
-    }
-
     try {
       recognitionRef.current?.abort();
     } catch {
       recognitionRef.current?.stop();
     }
-
-    stoppingVoiceRef.current = false;
     const recognition = new Recognition();
     recognition.lang = speechLang;
     recognition.continuous = false;
     recognition.interimResults = true;
-
     recognition.onresult = (event) => {
       const transcript = Array.from({ length: event.results.length })
         .map((_, index) => event.results[index]?.[0]?.transcript ?? "")
         .join("")
         .trim();
-
-      if (transcript) {
-        setInputText(transcript);
-      }
+      if (transcript) setInputText(transcript);
     };
-
-    recognition.onerror = (event) => {
+    recognition.onerror = () => {
       setVoiceState("idle");
-      setVoiceMessage(voiceErrorMessage(event.error));
+      setVoiceMessage("语音输入失败，请检查权限。");
     };
-
     recognition.onend = () => {
       setVoiceState("idle");
       recognitionRef.current = null;
-      if (stoppingVoiceRef.current) {
-        stoppingVoiceRef.current = false;
-        return;
-      }
-      setVoiceMessage(
-        t(locale, {
-          "zh-CN": "语音输入结束。",
-          "en-US": "Voice capture finished."
-        })
-      );
+      setVoiceMessage("语音输入结束。");
     };
-
     recognitionRef.current = recognition;
-    try {
-      recognition.start();
-      setVoiceState("listening");
-      setVoiceMessage(
-        t(locale, {
-          "zh-CN": "正在聆听。",
-          "en-US": "Listening."
-        })
-      );
-    } catch {
-      recognitionRef.current = null;
-      setVoiceState("idle");
-      setVoiceMessage(voiceErrorMessage("aborted"));
-    }
+    recognition.start();
+    setVoiceState("listening");
+    setVoiceMessage("正在聆听。");
   };
 
-  const runScenario = async (scenario: Record<string, unknown>) => {
-    const text = String(scenario.defaultIntentText ?? "");
-    setSelectedTemplate(String(scenario.scenarioId ?? ""));
+  const runScenario = async (scenario: DashboardMap) => {
+    const text = asText(scenario.defaultIntentText, "");
+    setSelectedTemplate(asText(scenario.scenarioId, ""));
     setInputText(text);
     await analyzeAndPlan();
   };
@@ -658,582 +514,177 @@ export function WorkbenchPage() {
     await analyzeAndPlan();
   };
 
-  const clearFaults = async () => {
-    await backend.clearFaults();
-    await analyzeAndPlan();
-  };
-
   const generateReport = async () => {
     const result = await backend.report(planResult?.missionId);
     setReportMarkdown(result.markdown ?? "");
   };
 
-  return (
-    <div className="stackPage">
-      <HeroCarousel
-        slides={slides}
-        activeIndex={carouselIndex}
-        onChange={setCarouselIndex}
-        motionEnabled={preferences.animationEnabled}
-      />
-
-      <section className="cardPanel">
-        <div className="panelHeader">
-          <div>
-            <span className="eyebrow">Dashboard</span>
-            <h3>{t(locale, { "zh-CN": "平台运行驾驶舱", "en-US": "Platform Dashboard" })}</h3>
-          </div>
-          <span className="softBadge">{String(dashboard.ddsRuntimeMode ?? "SIMULATED_DDS")}</span>
-        </div>
-        <div className="detailGrid">
-          {[
-            ["totalMissions", "任务总数"],
-            ["onlineDevices", "在线设备"],
-            ["averageRiskScore", "平均风险"],
-            ["recentFaultCount", "故障数"],
-            ["recentRetryCount", "重试数"],
-            ["topicCount", "Topic"]
-          ].map(([key, label]) => (
-            <div key={key}>
-              <small>{label}</small>
-              <strong>{String(dashboard[key] ?? "-")}</strong>
-            </div>
+  const detailsSections = {
+    dsl: {
+      label: "DSL 详情",
+      content: (
+        <div className="detailGridPanel">
+          {Object.entries(asMap(dslContract)).slice(0, 14).map(([key, value]) => (
+            <article key={key}><span>{key}</span><strong>{asText(value)}</strong></article>
           ))}
         </div>
-      </section>
-
-      <section className="cardPanel">
-        <div className="panelHeader">
-          <div>
-            <span className="eyebrow">Scenario Library</span>
-            <h3>{t(locale, { "zh-CN": "典型场景快捷入口", "en-US": "Scenario Shortcuts" })}</h3>
-          </div>
-        </div>
-        <div className="collaborationGrid">
-          {scenarios.map((scenario) => (
-            <article key={String(scenario.scenarioId)} className="adviceCard">
-              <div>
-                <strong>{String(scenario.name)}</strong>
-                <span>{String(scenario.qosLevel)}</span>
-              </div>
-              <p>{String(scenario.description)}</p>
-              <small>{String((scenario.recommendedDevices as string[] | undefined)?.join(" / ") ?? "")}</small>
-              <small>{String((scenario.requiredTopics as string[] | undefined)?.join(" / ") ?? "")}</small>
-              <button type="button" onClick={() => void runScenario(scenario)}>
-                {t(locale, { "zh-CN": "填入并生成", "en-US": "Use and Plan" })}
-              </button>
+      )
+    },
+    dds: {
+      label: "DDS Topic",
+      content: (
+        <div className="mappingList">
+          {idlMappings.map((item, index) => (
+            <article key={`${asText(item.topic)}-${index}`} className="mappingRow">
+              <span>{asText(item.topic)}</span>
+              <strong>{asText(item.idlModule)}.{asText(item.idlType)}</strong>
+              <small>{asText(item.qos)}</small>
             </article>
           ))}
+          {debugMode ? <DDSMessageTimeline items={ddsTimeline} /> : null}
         </div>
+      )
+    },
+    agents: {
+      label: "Agent 消息",
+      content: <div className="agentGrid"><AgentSuggestionCard title="无人车" items={vehicleAdvice} /><AgentSuggestionCard title="无人机" items={droneAdvice} /><AgentSuggestionCard title="路侧节点" items={roadsideAdvice} /><AgentSuggestionCard title="邻车" items={neighborAdvice} /></div>
+    },
+    conflict: {
+      label: "冲突消解",
+      content: <ConflictResolutionPanel detection={conflictDetection} resolution={conflictResolution} rejected={rejectedRoutes} />
+    },
+    planner: {
+      label: "Planner 对比",
+      content: <PlannerComparisonPanel algorithms={asList(plannerComparison.algorithms)} />
+    },
+    policy: {
+      label: "Policy 对比",
+      content: (
+        <div className="policyDetailStack">
+          <PolicyComparisonPanel policies={asList(policyComparison.policyResults)} whyBest={policyComparison.whyBestPolicy} />
+          <div className="optimizationGrid">
+            <article><small>优化前</small><strong>reward {asText(optimizationBefore.averageReward)}</strong><span>risk {asText(optimizationBefore.averageSafetyRisk)}</span></article>
+            <article><small>优化后</small><strong>reward {asText(optimizationAfter.averageReward)}</strong><span>risk {asText(optimizationAfter.averageSafetyRisk)}</span></article>
+            <article><small>训练状态</small><strong>heuristic</strong><span>{asText(trace.trainingStatus, "no RL training")}</span></article>
+          </div>
+        </div>
+      )
+    },
+    metrics: {
+      label: "指标",
+      content: <EvaluationMetricsPanel items={charts} />
+    },
+    json: {
+      label: "原始 JSON",
+      content: <JsonInspector value={{ parseResult: parsedIntent, planResult }} title="完整接口响应" />
+    },
+    logs: {
+      label: "日志",
+      content: (
+        <div id="logs" className="debugLogPanel">
+          {streamLogs.length ? streamLogs.slice(-120).map((line, index) => <div key={`${line}-${index}`}>{line}</div>) : "暂无日志"}
+        </div>
+      )
+    }
+  };
+
+  return (
+    <div className={debugMode ? "cockpitPage debugOn" : "cockpitPage"}>
+      <DashboardOverview
+        planResult={planResult}
+        dashboard={dashboard}
+        trace={trace}
+        ddsTimeline={ddsTimeline}
+        finalDecision={finalDecision}
+        conflictResolution={conflictResolution}
+        onlineDevices={onlineDevices}
+      />
+
+      <WorkflowStepper replanning={Boolean(trace.replanningTriggered ?? conflictResolution.whetherReplanningTriggered)} />
+
+      <section className="missionDeck">
+        <MissionInputPanel
+          inputText={inputText}
+          setInputText={setInputText}
+          selectedTemplate={selectedTemplate}
+          setSelectedTemplate={setSelectedTemplate}
+          onVoice={startVoiceInput}
+          voiceState={voiceState}
+          voiceMessage={voiceMessage}
+          onAnalyze={() => void analyzeAndPlan()}
+          onExecute={() => void executePlan()}
+          loading={loading}
+          executing={executing}
+          hasPlan={Boolean(planResult)}
+        />
+        {!demoMode ? (
+          <section className="scenarioRail cardPanel">
+            <div className="panelHeader"><h3>Scenario Library</h3><StatusBadge>{String(scenarios.length)}</StatusBadge></div>
+            <div className="scenarioGrid">{scenarios.slice(0, 6).map((scenario) => <ScenarioCard key={asText(scenario.scenarioId)} scenario={scenario} onRun={runScenario} />)}</div>
+          </section>
+        ) : null}
       </section>
 
-      <section className="workbenchLead">
-        <div className="cardPanel commandPanel">
+      <section className="mainWorkspace">
+        <div className="mapPanel cardPanel">
           <div className="panelHeader">
-            <div>
-              <span className="eyebrow">{t(locale, { "zh-CN": "Mission", "en-US": "Mission" })}</span>
-              <h3>{t(locale, { "zh-CN": "任务工作台", "en-US": "Command Center" })}</h3>
-            </div>
-            <span className="softBadge">
-              {planResult?.missionId ?? t(locale, { "zh-CN": "待生成", "en-US": "Pending" })}
-            </span>
+            <div><span className="eyebrow">Map / Route</span><h3>路线态势与候选路线</h3></div>
+            <StatusBadge tone="good">{asText(planResult?.ddsRuntimeMode ?? platformPlan?.ddsRuntimeMode, "SIMULATED_DDS")}</StatusBadge>
           </div>
-
-          <div className="toolbarRow">
-            <label className="fieldLabel compactField">
-              {t(locale, { "zh-CN": "模板", "en-US": "Template" })}
-              <select
-                value={selectedTemplate}
-                onChange={(event) => {
-                  setSelectedTemplate(event.target.value);
-                  if (event.target.value) {
-                    setInputText(event.target.value);
-                  }
-                }}
-              >
-                <option value="">{t(locale, { "zh-CN": "选择模板", "en-US": "Choose template" })}</option>
-                {starterTemplates[locale].map((template) => (
-                  <option key={template} value={template}>
-                    {template}
-                  </option>
-                ))}
-              </select>
-            </label>
-
-          </div>
-
-          <textarea
-            className="missionInput"
-            value={inputText}
-            onChange={(event) => setInputText(event.target.value)}
-            placeholder={t(locale, {
-              "zh-CN": "输入任务内容",
-              "en-US": "Describe the mission"
-            })}
-          />
-
-          <div className="commandBar">
-            <button className={voiceState === "listening" ? "ghostButton active" : "ghostButton"} onClick={() => void startStableVoiceInput()}>
-              {voiceState === "listening"
-                ? t(locale, { "zh-CN": "聆听中", "en-US": "Listening" })
-                : t(locale, { "zh-CN": "语音", "en-US": "Voice" })}
-            </button>
-            <span className="supportText">{voiceMessage}</span>
-          </div>
-
-          <div className="actionRow">
-            <button onClick={() => void analyzeAndPlan()} disabled={loading}>
-              {loading
-                ? t(locale, { "zh-CN": "生成中", "en-US": "Working" })
-                : t(locale, { "zh-CN": "生成方案", "en-US": "Generate Plan" })}
-            </button>
-            <button onClick={() => void executePlan()} disabled={executing || !planResult}>
-              {executing
-                ? t(locale, { "zh-CN": "协同中", "en-US": "Coordinating" })
-                : t(locale, { "zh-CN": "启动协同", "en-US": "Start Coordination" })}
-            </button>
-            <button className="ghostButton" onClick={pauseMission} disabled={!planResult}>
-              {t(locale, { "zh-CN": "暂停", "en-US": "Pause" })}
-            </button>
-            <button className="ghostButton" onClick={resumeMission} disabled={!planResult}>
-              {t(locale, { "zh-CN": "继续", "en-US": "Resume" })}
-            </button>
-            <button className="dangerButton" onClick={stopMission} disabled={!planResult}>
-              {t(locale, { "zh-CN": "停止", "en-US": "Stop" })}
-            </button>
-          </div>
-
-          <div className="statsStrip">
-            <div>
-              <small>{t(locale, { "zh-CN": "在线设备", "en-US": "Devices" })}</small>
-              <strong>{onlineDevices.length}</strong>
-            </div>
-            <div>
-              <small>{t(locale, { "zh-CN": "订阅", "en-US": "Subs" })}</small>
-              <strong>{planResult?.subscribeTopics.length ?? 0}</strong>
-            </div>
-            <div>
-              <small>{t(locale, { "zh-CN": "发布", "en-US": "Pubs" })}</small>
-              <strong>{planResult?.publishTopics.length ?? 0}</strong>
-            </div>
-            <div>
-              <small>{t(locale, { "zh-CN": "链路", "en-US": "Link" })}</small>
-              <strong>{planResult?.linkStrategy.primary ?? "-"}</strong>
-            </div>
-          </div>
-
-          {parseResult ? (
-            <div className="summaryBlock">
-              <strong>{parseResult.intentSummary}</strong>
-              <span>{Math.round(parseResult.confidence * 100)}%</span>
-            </div>
-          ) : null}
-
+          <MissionMap overlay={planResult?.mapOverlay} />
+          <PlannerComparisonPanel algorithms={asList(plannerComparison.algorithms)} />
         </div>
 
-        <aside className="cardPanel assistantPanel">
-          <div className="assistantHeader assistantHeaderCompact">
-            <AssistantAvatar accent={currentUser?.avatarAccent ?? "#67cfff"} name={preferences.assistantName} compact />
-            <div>
-              <h3>{preferences.assistantName}</h3>
-              <p>{currentUser?.organization ?? "Z-Link"}</p>
-            </div>
+        <aside className="decisionPanel cardPanel">
+          <RouteSummaryCard trace={trace} finalDecision={finalDecision} conflictResolution={conflictResolution} />
+          <div className="riskCallout">
+            <strong>风险提示</strong>
+            <p>{rejectedRoutes.length ? rejectedRoutes.map((item) => `${asText(item.route)} 被降权：${asText(item.rejectionReason ?? item.reason)}`).join("；") : asText(platformPlan?.riskWarnings, "暂无高风险路线。")}</p>
           </div>
-
-          <div className="assistantMeta">
-            <span>{t(locale, { "zh-CN": "语言", "en-US": "Language" })}: {localeMeta[locale].label}</span>
-            <span>{t(locale, { "zh-CN": "场景", "en-US": "Scene" })}: {currentUser?.favoriteScene ?? "-"}</span>
-          </div>
-
-          <div className="conversationList compactConversation">
-            {latestMessages.map((message) => (
-              <article key={message.id} className={message.role === "assistant" ? "chatBubble assistant" : "chatBubble user"}>
-                <strong>{message.title || preferences.assistantName}</strong>
-                <p>{message.content}</p>
-              </article>
-            ))}
-          </div>
+          <AgentSuggestionCard title="Agent 建议摘要" items={[...vehicleAdvice, ...droneAdvice, ...roadsideAdvice, ...neighborAdvice]} />
+          <DDSMessageTimeline items={ddsTimeline} compact />
         </aside>
       </section>
 
-      <section className="routeStage">
-        <MissionMap overlay={planResult?.mapOverlay} />
-      </section>
+      <DetailsTabs active={activeTab} setActive={setActiveTab} debugMode={debugMode} sections={detailsSections} />
 
-      <AutonomyDashboardPanel inputText={inputText} parseResult={parseResult} planResult={planResult} />
-
-      {collaboration ? (
-        <section className="cardPanel collaborationStage">
+      {debugMode ? (
+        <section className="debugToolbox cardPanel">
           <div className="panelHeader">
-            <div>
-              <span className="eyebrow">Autonomy</span>
-              <h3>{t(locale, { "zh-CN": "乘客意图协同闭环", "en-US": "Passenger Intent Loop" })}</h3>
-            </div>
-            <span className="softBadge">{collaboration.decisionOwner}</span>
+            <div><span className="eyebrow">Debug Mode</span><h3>调试工具与底层产物</h3></div>
+            <StatusBadge tone="warn">DEBUG</StatusBadge>
           </div>
-
-          <div className="decisionBanner">
-            <div>
-              <small>{t(locale, { "zh-CN": "最终路线", "en-US": "Final Route" })}</small>
-              <strong>{collaboration.finalDecision.route}</strong>
-              <p>{collaboration.finalDecision.reason}</p>
-            </div>
-            <div className="decisionMetrics">
-              <span>{Math.round(collaboration.finalDecision.confidence * 100)}%</span>
-              <small>{t(locale, { "zh-CN": "融合置信度", "en-US": "Confidence" })}</small>
-            </div>
-            <div className="decisionMetrics">
-              <span>{Math.round(collaboration.finalDecision.riskScore * 100)}%</span>
-              <small>{t(locale, { "zh-CN": "风险评分", "en-US": "Risk" })}</small>
-            </div>
-          </div>
-
-          {platformPlan?.riskAssessment ? (
-            <div className="decisionBanner">
-              <div>
-                <small>{t(locale, { "zh-CN": "风险评估", "en-US": "Risk Assessment" })}</small>
-                <strong>{String(platformPlan.riskAssessment.riskLevel ?? "-")} · {String(platformPlan.riskAssessment.riskScore ?? 0)}/100</strong>
-                <p>{((platformPlan.riskAssessment.riskFactors as string[] | undefined) ?? []).join("；")}</p>
-              </div>
-              <div className="decisionMetrics">
-                <span>{String(platformPlan.riskAssessment.whetherFallbackRequired ?? false)}</span>
-                <small>fallback</small>
-              </div>
-            </div>
-          ) : null}
-
-          <div className="collaborationGrid">
-            <div className="adviceColumn">
-              <h4>{t(locale, { "zh-CN": "故障注入仿真", "en-US": "Fault Injection" })}</h4>
-              <div className="toolbarRow">
-                <label className="fieldLabel compactField">
-                  Type
-                  <select value={faultType} onChange={(event) => setFaultType(event.target.value)}>
-                    {["DEVICE_OFFLINE", "LOW_BATTERY", "LINK_DEGRADED", "DDS_PUBLISH_FAILED", "HIGH_CONGESTION", "ROUTE_BLOCKED", "SENSOR_UNAVAILABLE"].map((type) => (
-                      <option key={type} value={type}>{type}</option>
-                    ))}
-                  </select>
-                </label>
-                <label className="fieldLabel compactField">
-                  Target
-                  <input value={faultTarget} onChange={(event) => setFaultTarget(event.target.value)} />
-                </label>
-                <button type="button" onClick={() => void injectFault()}>{t(locale, { "zh-CN": "注入", "en-US": "Inject" })}</button>
-                <button type="button" className="ghostButton" onClick={() => void clearFaults()}>{t(locale, { "zh-CN": "清除", "en-US": "Clear" })}</button>
-              </div>
-            </div>
-            <div className="idlColumn">
-              <h4>{t(locale, { "zh-CN": "任务报告", "en-US": "Mission Report" })}</h4>
-              <div className="actionRow">
-                <button type="button" onClick={() => void generateReport()}>{t(locale, { "zh-CN": "生成报告", "en-US": "Generate" })}</button>
-                <button type="button" className="ghostButton" onClick={() => void navigator.clipboard?.writeText(reportMarkdown)}>{t(locale, { "zh-CN": "复制", "en-US": "Copy" })}</button>
-              </div>
-              {reportMarkdown ? <pre className="miniReport">{reportMarkdown}</pre> : null}
-            </div>
-          </div>
-
-          <div className="collaborationGrid">
-            <div className="adviceColumn">
-              <h4>{t(locale, { "zh-CN": "设备建议", "en-US": "Device Advice" })}</h4>
-              <div className="adviceList">
-                {collaboration.deviceAdvice.map((item) => (
-                  <article key={item.nodeId} className="adviceCard">
-                    <div>
-                      <strong>{item.nodeId}</strong>
-                      <span>{item.role}</span>
-                    </div>
-                    <p>{item.advice}</p>
-                    <div className="adviceMeta">
-                      <span>{item.topic}</span>
-                      <span>{item.route}</span>
-                      <span>{Math.round(item.confidence * 100)}%</span>
-                      <span>{item.latencyMs}ms</span>
-                    </div>
-                  </article>
-                ))}
-              </div>
-            </div>
-
-            <div className="idlColumn">
-              <h4>{t(locale, { "zh-CN": "DSL / IDL / DDS 映射", "en-US": "DSL / IDL / DDS Mapping" })}</h4>
-              <div className="mappingList">
-                {collaboration.idlMappings.map((item) => (
-                  <article key={`${item.topic}-${item.idlType}`} className="mappingRow">
-                    <span>{item.topic}</span>
-                    <strong>{item.idlModule}.{item.idlType}</strong>
-                    <small>{item.qos}</small>
-                  </article>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          {collaboration.routePlan || collaboration.taskSchedule ? (
-            <div className="collaborationGrid">
-              <div className="adviceColumn">
-                <h4>{t(locale, { "zh-CN": "路径算法", "en-US": "Route Algorithm" })}</h4>
-                <article className="adviceCard">
-                  <div>
-                    <strong>{collaboration.finalDecision.routeAlgorithm ?? "A* / Dijkstra"}</strong>
-                    <span>{collaboration.finalDecision.routePath?.join(" -> ") ?? "-"}</span>
-                  </div>
-                  <p>
-                    {t(locale, { "zh-CN": "动态边权综合距离、拥堵、风险、通信覆盖和任务偏好。", "en-US": "Dynamic edge weights combine distance, congestion, risk, coverage, and mission preference." })}
-                  </p>
-                  <div className="adviceMeta">
-                    <span>cost={collaboration.finalDecision.routeCost ?? "-"}</span>
-                    <span>{collaboration.finalDecision.consensusPolicy}</span>
-                  </div>
-                </article>
-              </div>
-              <div className="idlColumn">
-                <h4>{t(locale, { "zh-CN": "任务调度", "en-US": "Task Scheduling" })}</h4>
-                <div className="mappingList">
-                  {((collaboration.taskSchedule?.assignments as Record<string, unknown>[] | undefined) ?? []).slice(0, 4).map((item) => (
-                    <article key={`${item.taskId}-${item.deviceId}`} className="mappingRow">
-                      <span>{String(item.taskName ?? item.taskId)}</span>
-                      <strong>{String(item.deviceId ?? "-")}</strong>
-                      <small>score={String(item.score ?? "-")}</small>
-                    </article>
-                  ))}
-                </div>
-              </div>
-            </div>
-          ) : null}
-
-          <div className="loopTimeline">
-            {collaboration.timeline.map((item) => (
-              <article key={`${item.time}-${item.title}`}>
-                <span>{item.time}</span>
-                <strong>{item.title}</strong>
-                <p>{item.detail}</p>
-              </article>
-            ))}
-          </div>
-        </section>
-      ) : null}
-
-      {platformPlan ? (
-        <section className="cardPanel collaborationStage">
-          <div className="panelHeader">
-            <div>
-              <span className="eyebrow">Platform</span>
-              <h3>{t(locale, { "zh-CN": "完整协同计划", "en-US": "Full Coordination Plan" })}</h3>
-            </div>
-            <div className="actionRow">
-              <span className="softBadge">{String(platformPlan.ddsRuntimeMode ?? planResult?.ddsRuntimeMode ?? "FALLBACK_SIMULATION")}</span>
-              <span className="softBadge">{String(platformPlan.executionStatus.state ?? "READY")}</span>
-            </div>
-          </div>
-
-          <div className="decisionBanner">
-            <div>
-              <small>{t(locale, { "zh-CN": "任务类型", "en-US": "Task Type" })}</small>
-              <strong>{String(platformPlan.intent.taskType ?? "-")}</strong>
-              <p>{platformPlan.decisionSummary}</p>
-            </div>
-            <div className="decisionMetrics">
-              <span>{platformPlan.riskWarnings.length}</span>
-              <small>{t(locale, { "zh-CN": "风险提示", "en-US": "Risks" })}</small>
-            </div>
-            <div className="decisionMetrics">
-              <span>{platformPlan.ddsSimulation.length}</span>
-              <small>DDS</small>
-            </div>
-            <div className="decisionMetrics">
-              <span>{executionTimeline.length}</span>
-              <small>{t(locale, { "zh-CN": "时间线", "en-US": "Timeline" })}</small>
-            </div>
-          </div>
-
-          <div className="collaborationGrid">
-            <div className="adviceColumn">
-              <h4>{t(locale, { "zh-CN": "结构化 DSL", "en-US": "Structured DSL" })}</h4>
-              <div className="mappingList">
-                {Object.entries(platformPlan.structuredDsl).slice(0, 12).map(([key, value]) => (
-                  <article key={key} className="mappingRow">
-                    <span>{key}</span>
-                    <strong>{Array.isArray(value) ? value.join(", ") : typeof value === "object" && value ? JSON.stringify(value) : String(value)}</strong>
-                  </article>
-                ))}
-              </div>
-            </div>
-
-            <div className="idlColumn">
-              <h4>{t(locale, { "zh-CN": "DDS Topic / QoS", "en-US": "DDS Topic / QoS" })}</h4>
-              <div className="mappingList">
-                {platformPlan.qosPolicies.map((qos) => (
-                  <article key={String(qos.topic)} className="mappingRow">
-                    <span>{String(qos.topic)}</span>
-                    <strong>{String(qos.reliability)} / {String(qos.durability)}</strong>
-                    <small>{String(qos.latencyBudgetMs)}ms · retry={String(qos.retryLimit ?? 0)}</small>
-                    <p>{String(qos.reason ?? qos.fallbackPolicy ?? "")}</p>
-                  </article>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          <div className="collaborationGrid">
-            <div className="adviceColumn">
-              <h4>{t(locale, { "zh-CN": "候选路线", "en-US": "Candidate Routes" })}</h4>
-              <div className="mappingList">
-                {(((platformPlan.routePlan?.candidateRoutes as Record<string, unknown>[] | undefined) ?? [])).slice(0, 4).map((route) => (
-                  <article key={String(route.routeId)} className="mappingRow">
-                    <span>{String(route.routeId)}</span>
-                    <strong>cost={String(route.cost)} · risk={String(route.risk)}</strong>
-                    <small>{String(route.recommended) === "true" ? t(locale, { "zh-CN": "推荐", "en-US": "Recommended" }) : String(route.reason ?? "")}</small>
-                  </article>
-                ))}
-              </div>
-            </div>
-            <div className="idlColumn">
-              <h4>{t(locale, { "zh-CN": "Topic 发布/订阅链路", "en-US": "Topic Pub/Sub Links" })}</h4>
-              <div className="mappingList">
-                {platformPlan.topics.slice(0, 6).map((topic) => (
-                  <article key={String(topic.name)} className="mappingRow">
-                    <span>{String(topic.name)} · {String(topic.direction)}</span>
-                    <strong>{String(topic.idlType ?? "-")}</strong>
-                    <small>{String(topic.ddsTopic ?? "")}</small>
-                  </article>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          <div className="collaborationGrid">
-            <div className="adviceColumn">
-              <h4>{t(locale, { "zh-CN": "设备分工", "en-US": "Device Assignments" })}</h4>
-              <div className="adviceList">
-                {platformPlan.deviceAssignments.map((item) => (
-                  <article key={`${item.taskId}-${item.deviceId}`} className="adviceCard">
-                    <div>
-                      <strong>{String(item.taskName ?? item.taskId)}</strong>
-                      <span>{String(item.deviceId ?? "-")} · {String(item.score ?? "-")}</span>
-                    </div>
-                    <p>{String(item.reason ?? "")}</p>
-                    <small>{t(locale, { "zh-CN": "备选设备", "en-US": "Backup" })}: {String(item.backupDeviceId ?? "-")} · {String(item.riskWarning ?? "")}</small>
-                  </article>
-                ))}
-              </div>
-            </div>
-            <div className="idlColumn">
-              <h4>{t(locale, { "zh-CN": "执行日志与降级", "en-US": "Execution Logs & Fallback" })}</h4>
-              <div className="mappingList">
-                {platformPlan.ddsSimulation.slice(0, 6).map((log, index) => (
-                  <article key={`${log.topic}-${log.phase}-${index}`} className="mappingRow">
-                    <span>{String(log.phase)} · {String(log.topic)}</span>
-                    <strong>{String(log.status)}</strong>
-                    <small>{String(log.reason)}</small>
-                  </article>
-                ))}
-              </div>
-              <div className="loopTimeline">
-                {platformPlan.fallbackStrategies.slice(0, 4).map((item, index) => (
-                  <article key={item}>
-                    <span>F{index + 1}</span>
-                    <strong>{t(locale, { "zh-CN": "降级策略", "en-US": "Fallback" })}</strong>
-                    <p>{item}</p>
-                  </article>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          {executionTimeline.length ? (
-            <div className="loopTimeline executionTimeline">
-              {executionTimeline.map((item) => (
-                <article key={`${item.stage}-${item.timestamp}`}>
-                  <span>{new Date(item.timestamp).toLocaleTimeString()}</span>
-                  <strong>{item.stage} · {item.status}</strong>
-                  <p>{item.actor}{item.topic ? ` / ${item.topic}` : ""}：{item.message}</p>
-                  <small>{item.latencyMs}ms · retry={item.retryCount} · risk={item.riskLevel}</small>
-                </article>
+          <div className="debugToolGrid">
+            <article>
+              <h4>故障注入</h4>
+              <select value={faultType} onChange={(event) => setFaultType(event.target.value)}>
+                {["DEVICE_OFFLINE", "LOW_BATTERY", "LINK_DEGRADED", "DDS_PUBLISH_FAILED", "HIGH_CONGESTION", "ROUTE_BLOCKED", "SENSOR_UNAVAILABLE"].map((type) => <option key={type} value={type}>{type}</option>)}
+              </select>
+              <input value={faultTarget} onChange={(event) => setFaultTarget(event.target.value)} />
+              <button onClick={() => void injectFault()}>注入并重算</button>
+            </article>
+            <article>
+              <h4>任务控制</h4>
+              <button className="ghostButton" onClick={pauseMission} disabled={!planResult}>暂停</button>
+              <button className="ghostButton" onClick={resumeMission} disabled={!planResult}>继续</button>
+              <button className="dangerButton" onClick={stopMission} disabled={!planResult}>停止</button>
+            </article>
+            <article>
+              <h4>报告 / 产物</h4>
+              <button onClick={() => void generateReport()} disabled={!planResult}>生成报告</button>
+              <button className="ghostButton" onClick={() => void navigator.clipboard?.writeText(reportMarkdown)}>复制报告</button>
+              {reportMarkdown ? <pre>{reportMarkdown}</pre> : null}
+            </article>
+            <article>
+              <h4>Topic 快测</h4>
+              {(planResult?.publishTopics ?? []).slice(0, 4).map((topic) => (
+                <button key={topic.name} className="ghostButton" onClick={() => void topicAction(topic.name, "publish", "MISSION_EVENT:READY")}>{topic.name}</button>
               ))}
-            </div>
-          ) : null}
+            </article>
+          </div>
+          <JsonInspector value={{ dslPreview: planResult?.dslPreview, javaCode: planResult?.javaCode, platformPlan }} title="生成产物与平台计划" />
         </section>
       ) : null}
-
-      {planResult ? (
-        <section className="cardPanel artifactsStage">
-          <div className="panelHeader">
-            <div>
-              <span className="eyebrow">Artifacts</span>
-              <h3>{t(locale, { "zh-CN": "生成产物", "en-US": "Generated Artifacts" })}</h3>
-            </div>
-            <span className="softBadge">{planResult.compileStatus}</span>
-          </div>
-          <div className="codePreviewGrid compactCodePreview">
-            <div>
-              <h4>DSL</h4>
-              <pre>{planResult.dslPreview}</pre>
-            </div>
-            <div>
-              <h4>Java</h4>
-              <pre>{planResult.javaCode}</pre>
-            </div>
-          </div>
-        </section>
-      ) : null}
-
-      <div className="dashboardGrid compactDashboard">
-        <TimelinePanel plan={planResult} />
-
-        <section className="cardPanel strategyPanel">
-          <div className="panelHeader">
-            <div>
-              <span className="eyebrow">{t(locale, { "zh-CN": "Plan", "en-US": "Plan" })}</span>
-              <h3>{t(locale, { "zh-CN": "协同策略", "en-US": "Coordination" })}</h3>
-            </div>
-          </div>
-
-          {planResult ? (
-            <div className="strategyGrid">
-              <div>
-                <small>{t(locale, { "zh-CN": "摘要", "en-US": "Summary" })}</small>
-                <strong>{planResult.planNarrative}</strong>
-              </div>
-              <div>
-                <small>{t(locale, { "zh-CN": "主链路", "en-US": "Primary" })}</small>
-                <strong>{planResult.linkStrategy.primary}</strong>
-              </div>
-              <div>
-                <small>{t(locale, { "zh-CN": "备用链路", "en-US": "Backup" })}</small>
-                <strong>{planResult.linkStrategy.backup}</strong>
-              </div>
-              {planResult.kpis.map((metric) => (
-                <div key={metric.label}>
-                  <small>{metric.label}</small>
-                  <strong>{metric.value}</strong>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="emptyPanel">{t(locale, { "zh-CN": "生成方案后显示。", "en-US": "Visible after plan generation." })}</div>
-          )}
-        </section>
-      </div>
-
-      <div className="twoColumnSection">
-        <TopicTable
-          title={t(locale, { "zh-CN": "订阅主题", "en-US": "Subscriptions" })}
-          topics={planResult?.subscribeTopics ?? []}
-          mode="sub"
-          onToggle={(topic) => void topicAction(topic.name, "toggle")}
-          onTest={(topic) =>
-            void topicAction(topic.name, "test", t(locale, { "zh-CN": "订阅链路测试通过", "en-US": "Subscription test passed" }))
-          }
-        />
-
-        <TopicTable
-          title={t(locale, { "zh-CN": "发布主题", "en-US": "Publications" })}
-          topics={planResult?.publishTopics ?? []}
-          mode="pub"
-          onToggle={(topic) => void topicAction(topic.name, "toggle")}
-          onTest={(topic) => void topicAction(topic.name, "publish", "MISSION_EVENT:READY")}
-        />
-      </div>
     </div>
   );
 }

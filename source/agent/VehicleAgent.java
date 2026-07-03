@@ -1,7 +1,6 @@
 package agent;
 
 import dds.VirtualDDSMessageBus;
-import policy.AgentState;
 import policy.WeightedAgentPolicy;
 
 import java.util.Arrays;
@@ -23,13 +22,6 @@ public class VehicleAgent extends AutonomousAgent {
 
     protected String publishTopic() {
         return VirtualDDSMessageBus.TOPIC_ROUTE_SUGGESTION;
-    }
-
-    protected String chooseRoute(String policyRoute, AgentState state) {
-        if (state.passengerUrgent && !state.passengerSafetyFirst && state.localRisk < 0.62) {
-            return "route_D_emergency_green_wave";
-        }
-        return state.localRisk > 0.55 ? "route_C_elevated_detour" : policyRoute;
     }
 
     protected double roleRiskBias() {

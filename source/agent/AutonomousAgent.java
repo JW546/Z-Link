@@ -3,6 +3,9 @@ package agent;
 import dds.DDSMessage;
 import dds.DDSQoS;
 import dds.VirtualDDSMessageBus;
+import planner.RouteFeatureExtractor;
+import planner.RouteScoringContext;
+import planner.RouteSelectionResult;
 import policy.AgentAction;
 import policy.AgentState;
 import policy.WeightedAgentPolicy;
@@ -18,9 +21,11 @@ public abstract class AutonomousAgent {
     protected final AgentRole role;
     protected final SystemWorldModel worldModel;
     protected final WeightedAgentPolicy policy;
+    protected final RouteFeatureExtractor routeSelector = new RouteFeatureExtractor();
     protected final List<DDSMessage> inbox = new ArrayList<DDSMessage>();
     protected final List<AgentAdvice> proposals = new ArrayList<AgentAdvice>();
     protected String lastExplanation = "";
+    protected RouteSelectionResult lastRouteSelection;
 
     protected AutonomousAgent(String agentId, AgentRole role, WeightedAgentPolicy policy) {
         this.agentId = agentId;
@@ -54,8 +59,12 @@ public abstract class AutonomousAgent {
         AgentState state = worldModel.toAgentState(agentId, role.name());
         AgentAction action = policy.decide(state);
         String route = chooseRoute(action.route, state);
-        double risk = clamp(state.localRisk + roleRiskBias());
-        double confidence = clamp(state.messageConfidence * 0.55 + state.sourceTrust * 0.30 + state.messageFreshness * 0.15);
+        double selectedRisk = lastRouteSelection != null && lastRouteSelection.selectedRoute != null
+            ? lastRouteSelection.selectedRoute.safetyRisk : state.localRisk;
+        double selectedConfidence = lastRouteSelection != null && lastRouteSelection.selectedRoute != null
+            ? lastRouteSelection.selectedRoute.messageConfidence : state.messageConfidence;
+        double risk = clamp(selectedRisk + roleRiskBias());
+        double confidence = clamp(selectedConfidence * 0.55 + state.sourceTrust * 0.30 + state.messageFreshness * 0.15);
         lastExplanation = explain(action, state, route);
         AgentAdvice advice = new AgentAdvice(agentId, role, publishTopic(), route, risk, confidence, lastExplanation);
         proposals.add(advice);
@@ -112,26 +121,36 @@ public abstract class AutonomousAgent {
 
     protected abstract String publishTopic();
 
-    protected abstract String chooseRoute(String policyRoute, AgentState state);
+    protected String chooseRoute(String policyRoute, AgentState state) {
+        RouteScoringContext context = RouteScoringContext.fromState(state, role);
+        lastRouteSelection = routeSelector.select(state, context);
+        String selected = lastRouteSelection.routeId();
+        return selected.isBlank() ? (policyRoute == null ? "" : policyRoute) : selected;
+    }
 
     protected abstract double roleRiskBias();
 
     protected String explain(AgentAction action, AgentState state, String route) {
+        String routeReason = lastRouteSelection == null ? "" : " " + lastRouteSelection.explanation
+            + " DDS influence=" + lastRouteSelection.influencingMessages + ".";
         return role.name() + " agent " + agentId + " chose " + route
             + " because " + action.reason
             + ", risk=" + round(state.localRisk)
             + ", congestion=" + round(state.congestionLevel)
             + ", freshness=" + round(state.messageFreshness)
-            + ", trust=" + round(state.sourceTrust) + ".";
+            + ", trust=" + round(state.sourceTrust) + "."
+            + routeReason;
     }
 
     protected double intentAlignment(DDSMessage message) {
         String text = worldModel.passengerIntent == null ? "" : worldModel.passengerIntent;
-        String route = String.valueOf(message.payload.getOrDefault("route", ""));
         double score = 0.45;
-        if (text.contains("安全") && (route.contains("elevated") || route.contains("school") || route.contains("safe"))) score += 0.35;
-        if (text.contains("尽快") && route.contains("green_wave")) score += 0.35;
-        if (text.contains("拥堵") && !route.contains("main_road")) score += 0.20;
+        double risk = readNumber(message.payload, "safetyRisk", readNumber(message.payload, "riskScore", worldModel.roadRisk));
+        double congestion = readNumber(message.payload, "congestionLevel", worldModel.congestionLevel);
+        double emergency = readNumber(message.payload, "emergencyPriority", readNumber(message.payload, "emergencyLevel", 0.0));
+        if ((text.contains("安全") || text.toLowerCase().contains("safe")) && risk <= 0.35) score += 0.35;
+        if ((text.contains("尽快") || text.toLowerCase().contains("urgent")) && emergency >= 0.50) score += 0.35;
+        if ((text.contains("拥堵") || text.toLowerCase().contains("congestion")) && congestion <= 0.45) score += 0.20;
         return clamp(score);
     }
 

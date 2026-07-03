@@ -1979,6 +1979,453 @@ pre {
   background: linear-gradient(90deg, var(--accent), var(--accent-2));
 }
 
+.cockpitPage {
+  display: grid;
+  gap: 16px;
+}
+
+.cockpitHero {
+  display: grid;
+  grid-template-columns: minmax(320px, 0.72fr) minmax(0, 1.28fr);
+  gap: 18px;
+  align-items: stretch;
+  overflow: hidden;
+  background:
+    linear-gradient(135deg, rgba(12, 20, 31, 0.96), rgba(9, 15, 22, 0.94)),
+    linear-gradient(90deg, rgba(123, 177, 217, 0.08), transparent);
+}
+
+.cockpitHeroMain {
+  display: grid;
+  align-content: center;
+  gap: 14px;
+  min-width: 0;
+}
+
+.cockpitHeroMain h1 {
+  margin: 0;
+  max-width: 13ch;
+  font-size: clamp(30px, 3.4vw, 54px);
+  line-height: 1.05;
+  letter-spacing: 0;
+}
+
+.cockpitHeroMain p {
+  max-width: 720px;
+  margin: 0;
+  color: var(--body-copy);
+  line-height: 1.7;
+}
+
+.cockpitMetricGrid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.metricCard {
+  display: grid;
+  align-content: space-between;
+  min-height: 118px;
+  gap: 8px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(8, 14, 22, 0.78);
+}
+
+.metricCard span,
+.metricCard small {
+  color: var(--text-soft);
+}
+
+.metricCard strong {
+  min-width: 0;
+  font-size: 24px;
+  overflow-wrap: anywhere;
+}
+
+.metricCard.good {
+  border-color: rgba(127, 197, 163, 0.32);
+}
+
+.metricCard.warn {
+  border-color: rgba(216, 177, 107, 0.36);
+}
+
+.metricCard.danger {
+  border-color: rgba(214, 107, 107, 0.42);
+}
+
+.cockpitBadge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 28px;
+  padding: 5px 10px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--badge-bg);
+  color: var(--text-soft);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.cockpitBadge.good {
+  color: var(--success);
+}
+
+.cockpitBadge.warn {
+  color: var(--accent);
+}
+
+.cockpitBadge.danger {
+  color: var(--danger);
+}
+
+.workflowStepper {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 8px;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(8, 13, 20, 0.72);
+}
+
+.workflowStepper article {
+  position: relative;
+  display: grid;
+  gap: 6px;
+  min-height: 74px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--tile-bg);
+}
+
+.workflowStepper span {
+  color: var(--accent);
+  font-weight: 800;
+  font-size: 12px;
+}
+
+.workflowStepper strong {
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.missionDeck {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(320px, 0.8fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.missionInputPanel,
+.scenarioRail {
+  display: grid;
+  gap: 12px;
+}
+
+.cockpitInput {
+  min-height: 96px;
+  max-height: 132px;
+  font-size: 15px;
+  line-height: 1.55;
+}
+
+.scenarioGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.scenarioCard {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--tile-bg);
+}
+
+.scenarioCard p,
+.scenarioCard small {
+  margin: 0;
+  color: var(--text-soft);
+  line-height: 1.5;
+}
+
+.mainWorkspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1.5fr) minmax(360px, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.mapPanel,
+.decisionPanel {
+  display: grid;
+  gap: 14px;
+}
+
+.mapPanel .mapStage {
+  padding: 0;
+  box-shadow: none;
+  background: transparent;
+}
+
+.decisionPanel {
+  position: sticky;
+  top: 92px;
+}
+
+.routeSummaryCard {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: rgba(13, 22, 32, 0.9);
+}
+
+.routeSummaryCard h2 {
+  margin: 0;
+  font-size: 28px;
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+}
+
+.routeSummaryCard p,
+.riskCallout p,
+.agentSuggestionCard p,
+.ddsMiniTimeline p,
+.ddsMessageTimeline p,
+.conflictGrid p,
+.plannerRows p,
+.dashboardNote {
+  margin: 0;
+  color: var(--body-copy);
+  line-height: 1.55;
+}
+
+.routeEvidenceStrip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.routeEvidenceStrip span {
+  padding: 6px 9px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--text-soft);
+  background: var(--badge-bg);
+  font-size: 12px;
+}
+
+.riskCallout {
+  display: grid;
+  gap: 8px;
+  padding: 14px;
+  border: 1px solid rgba(216, 177, 107, 0.28);
+  border-radius: 8px;
+  background: rgba(216, 177, 107, 0.06);
+}
+
+.agentGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.agentSuggestionGroup {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+
+.agentSuggestionGroup h4,
+.comparisonPanel h3,
+.evaluationPanel h3,
+.conflictPanel h3 {
+  margin: 0;
+}
+
+.agentSuggestionCard {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--tile-bg);
+}
+
+.agentSuggestionCard > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: center;
+}
+
+.agentSuggestionCard span {
+  color: var(--accent-2);
+  overflow-wrap: anywhere;
+}
+
+.agentSuggestionCard small,
+.ddsMiniTimeline small,
+.ddsMessageTimeline small,
+.plannerRows small,
+.policyRows small {
+  color: var(--text-soft);
+}
+
+.ddsMiniTimeline,
+.ddsMessageTimeline {
+  display: grid;
+  gap: 10px;
+}
+
+.ddsMessageTimeline {
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.ddsMiniTimeline article,
+.ddsMessageTimeline article,
+.plannerRows article,
+.policyRows article,
+.conflictGrid article,
+.detailGridPanel article,
+.debugToolGrid article {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--tile-bg);
+}
+
+.ddsMiniTimeline span,
+.ddsMessageTimeline span,
+.detailGridPanel span {
+  color: var(--accent);
+  font-weight: 800;
+}
+
+.detailsTabs {
+  display: grid;
+  gap: 14px;
+}
+
+.tabBar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.tabSurface {
+  min-height: 240px;
+}
+
+.detailGridPanel,
+.conflictGrid,
+.debugToolGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.detailGridPanel strong,
+.conflictGrid strong {
+  overflow-wrap: anywhere;
+}
+
+.comparisonPanel,
+.evaluationPanel,
+.conflictPanel,
+.policyDetailStack {
+  display: grid;
+  gap: 12px;
+}
+
+.plannerRows,
+.policyRows {
+  display: grid;
+  gap: 10px;
+}
+
+.plannerRows article.selected {
+  border-color: rgba(127, 197, 163, 0.34);
+}
+
+.plannerRows article.baseline {
+  border-color: rgba(216, 177, 107, 0.22);
+}
+
+.plannerRows article div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.policyRows {
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.jsonInspector {
+  display: grid;
+  gap: 10px;
+}
+
+.jsonInspector summary {
+  cursor: pointer;
+  color: var(--accent);
+  font-weight: 800;
+}
+
+.jsonInspector pre,
+.debugLogPanel,
+.debugToolGrid pre {
+  max-height: 360px;
+  overflow: auto;
+}
+
+.debugLogPanel {
+  display: grid;
+  gap: 6px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--log-bg);
+  color: var(--code-text);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12px;
+}
+
+.debugToolbox {
+  display: grid;
+  gap: 14px;
+}
+
+.debugToolGrid article {
+  align-content: start;
+}
+
+.debugToolGrid h4 {
+  margin: 0;
+}
+
+.debugToolGrid button {
+  margin-right: 6px;
+  margin-bottom: 6px;
+}
+
 .guideDots {
   display: flex;
   gap: 8px;
@@ -2030,6 +2477,9 @@ pre {
   .workspaceShell,
   .heroOverviewGrid,
   .workbenchLead,
+  .cockpitHero,
+  .missionDeck,
+  .mainWorkspace,
   .compactDashboard,
   .missionArchiveLayout,
   .capabilityLayout,
@@ -2043,13 +2493,24 @@ pre {
   .dashboardTwoCol,
   .agentProcessGrid,
   .decisionExplainGrid,
-  .optimizationGrid {
+  .optimizationGrid,
+  .cockpitMetricGrid,
+  .workflowStepper,
+  .scenarioGrid,
+  .agentGrid,
+  .detailGridPanel,
+  .conflictGrid,
+  .debugToolGrid {
     grid-template-columns: 1fr;
   }
 
   .sidebar {
     position: static;
     max-height: none;
+  }
+
+  .decisionPanel {
+    position: static;
   }
 
   .fleetGrid,

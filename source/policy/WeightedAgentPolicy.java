@@ -26,12 +26,9 @@ public class WeightedAgentPolicy implements AgentPolicy {
         double conflict = state.hasConflict ? conflictWeight : 0.0;
         double priority = clamp(safetyPressure + timePressure + evidence + conflict);
 
-        String route = safetyPressure >= timePressure
-            ? "route_C_elevated_detour"
-            : "route_D_emergency_green_wave";
         AgentAction.Type action = state.replanRequired || priority > 0.72
             ? AgentAction.Type.REQUEST_REPLANNING : AgentAction.Type.CHOOSE_ROUTE;
-        return new AgentAction(action, route, "", priority,
+        return new AgentAction(action, "", "", priority,
             "weighted policy: safety=" + round(safetyPressure)
                 + ", time=" + round(timePressure)
                 + ", evidence=" + round(evidence)

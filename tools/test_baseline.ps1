@@ -183,6 +183,14 @@ Write-Host "[BASELINE] Run route planner test"
 & $javaExe "-Dfile.encoding=UTF-8" -cp $classpath integration.RoutePlannerTest
 if ($LASTEXITCODE -ne 0) { throw "Route planner test failed." }
 
+Write-Host "[BASELINE] Compile route feature selection test"
+& $javacExe -encoding UTF-8 -sourcepath (Join-Path $repoRoot "source") -cp $classpath -d $outDir (Join-Path $repoRoot "source\integration\RouteFeatureSelectionTest.java")
+if ($LASTEXITCODE -ne 0) { throw "Route feature selection test compile failed." }
+
+Write-Host "[BASELINE] Run route feature selection test"
+& $javaExe "-Dfile.encoding=UTF-8" -cp $classpath integration.RouteFeatureSelectionTest
+if ($LASTEXITCODE -ne 0) { throw "Route feature selection test failed." }
+
 Write-Host "[BASELINE] Compile conflict resolver test"
 & $javacExe -encoding UTF-8 -sourcepath (Join-Path $repoRoot "source") -cp $classpath -d $outDir (Join-Path $repoRoot "source\integration\ConflictResolverTest.java")
 if ($LASTEXITCODE -ne 0) { throw "Conflict resolver test compile failed." }

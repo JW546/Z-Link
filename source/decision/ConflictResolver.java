@@ -113,7 +113,7 @@ public class ConflictResolver {
 
         // Backward-compatible fields used by earlier tests and API code.
         result.put("conflictingRoutes", routes(safeEvidence));
-        result.put("finalRoute", accepted == null ? "route_A_main_road" : accepted.route);
+        result.put("finalRoute", accepted == null ? "" : accepted.route);
         result.put("riskScore", accepted == null ? 0.50 : round(accepted.riskScore));
         result.put("policy", safetyFirst ? "configurable_safety_first_conflict_resolution"
             : "configurable_time_risk_conflict_resolution");
@@ -300,7 +300,7 @@ public class ConflictResolver {
             evidence.confidence = advice.confidence;
             evidence.sourceTrust = config.sourceTrust.getOrDefault(advice.agentId, 0.60);
             evidence.freshness = 1.0;
-            evidence.timeAdvantage = routeTimeAdvantage(advice.route);
+            evidence.timeAdvantage = 0.50;
             evidence.intentAlignment = 0.65;
             evidence.ddsDelayMs = 0.0;
             evidence.packetLossRate = 0.0;
@@ -314,13 +314,13 @@ public class ConflictResolver {
             SuggestionEvidence evidence = new SuggestionEvidence();
             evidence.sourceId = message.sourceId;
             evidence.role = string(message.payload, "role", roleFromSource(message.sourceId));
-            evidence.route = string(message.payload, "route", "route_A_main_road");
+            evidence.route = string(message.payload, "route", "");
             evidence.riskScore = number(message.payload, "riskScore", number(message.payload, "risk_score", 0.35));
             evidence.confidence = message.confidence;
             evidence.sourceTrust = number(message.payload, "sourceTrust",
                 config.sourceTrust.getOrDefault(message.sourceId, 0.60));
             evidence.freshness = message.messageFreshness();
-            evidence.timeAdvantage = number(message.payload, "timeAdvantage", routeTimeAdvantage(evidence.route));
+            evidence.timeAdvantage = number(message.payload, "timeAdvantage", 0.50);
             evidence.intentAlignment = number(message.payload, "intentAlignment", 0.65);
             evidence.ddsDelayMs = number(message.payload, "ddsDelayMs",
                 message.deliveredAt() > 0L ? message.deliveredAt() - message.timestamp : 0.0);
@@ -355,11 +355,6 @@ public class ConflictResolver {
         }
 
         private static double routeTimeAdvantage(String route) {
-            if (route == null) return 0.40;
-            if (route.contains("A") || route.contains("main")) return 0.92;
-            if (route.contains("D") || route.contains("green_wave")) return 0.82;
-            if (route.contains("C") || route.contains("elevated")) return 0.58;
-            if (route.contains("B") || route.contains("school")) return 0.42;
             return 0.50;
         }
 

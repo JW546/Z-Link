@@ -99,17 +99,7 @@ public class WeightedUtilityAgentPolicy implements AgentPolicy {
 
     protected String bestRoute(AgentState state) {
         if (state.candidateRoutes.isEmpty()) {
-            return state.currentRoute == null || state.currentRoute.isBlank() ? "route_A_main_road" : state.currentRoute;
-        }
-        if (state.passengerSafetyFirst) {
-            for (String route : state.candidateRoutes) {
-                if (route.contains("school") || route.contains("elevated")) return route;
-            }
-        }
-        if (state.passengerUrgent) {
-            for (String route : state.candidateRoutes) {
-                if (route.contains("green_wave") || route.contains("main_road")) return route;
-            }
+            return state.currentRoute == null ? "" : state.currentRoute;
         }
         return state.candidateRoutes.get(0);
     }

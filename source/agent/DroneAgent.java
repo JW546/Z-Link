@@ -1,7 +1,6 @@
 package agent;
 
 import dds.VirtualDDSMessageBus;
-import policy.AgentState;
 import policy.WeightedAgentPolicy;
 
 import java.util.Arrays;
@@ -18,10 +17,6 @@ public class DroneAgent extends AutonomousAgent {
 
     protected String publishTopic() {
         return VirtualDDSMessageBus.TOPIC_DRONE_OBSERVATION;
-    }
-
-    protected String chooseRoute(String policyRoute, AgentState state) {
-        return state.congestionLevel > 0.65 ? "route_C_elevated_detour" : "route_A_main_road";
     }
 
     protected double roleRiskBias() {

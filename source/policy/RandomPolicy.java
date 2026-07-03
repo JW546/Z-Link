@@ -43,7 +43,7 @@ public class RandomPolicy implements AgentPolicy {
     }
 
     private String firstRoute(AgentState state) {
-        if (state == null || state.candidateRoutes.isEmpty()) return "route_A_main_road";
+        if (state == null || state.candidateRoutes.isEmpty()) return "";
         return state.candidateRoutes.get(0);
     }
 }

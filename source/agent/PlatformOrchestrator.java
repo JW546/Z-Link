@@ -272,9 +272,9 @@ public class PlatformOrchestrator {
             return routePlanner.plan(ctx);
         } catch (RuntimeException ex) {
             AdaptiveRoutePlanner.RoutePlan fallback = new AdaptiveRoutePlanner.RoutePlan();
-            fallback.routeId = "route_A_main_road";
+            fallback.routeId = "fallback-conservative-route";
             fallback.algorithm = "fallback_route_policy";
-            fallback.path = Arrays.asList("START", "MAIN_ROAD", "HOSPITAL");
+            fallback.path = Arrays.asList("START", "SAFE_HOLDING_POINT", "DESTINATION");
             fallback.estimatedMinutes = 30;
             fallback.riskScore = 0.35;
             fallback.reason = "路径规划异常，采用主路兜底: " + ex.getMessage();
@@ -369,7 +369,7 @@ public class PlatformOrchestrator {
 
     private List<String> fallbackStrategies(IntentProfile intent, List<String> risks) {
         List<String> fallback = new ArrayList<String>();
-        fallback.add("路径不可达时回退 route_A_main_road 并降低速度。");
+        fallback.add("路径不可达时回退到低速保守候选路线，并持续订阅风险 Topic。");
         fallback.add("无人机不可用时由 RSU 接管局部感知，车辆提高安全距离。");
         fallback.add("可靠 DDS Topic 超时后执行 1 次重试，仍失败则降级为广域链路摘要同步。");
         if (intent.taskType.contains("应急") || intent.taskType.contains("医疗")) {

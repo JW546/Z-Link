@@ -1,7 +1,6 @@
 package agent;
 
 import dds.VirtualDDSMessageBus;
-import policy.AgentState;
 import policy.WeightedAgentPolicy;
 
 import java.util.Arrays;
@@ -24,10 +23,6 @@ public class CommunicationAdapterAgent extends AutonomousAgent {
 
     protected String publishTopic() {
         return VirtualDDSMessageBus.TOPIC_REPLANNING_REQUEST;
-    }
-
-    protected String chooseRoute(String policyRoute, AgentState state) {
-        return state.hasConflict || state.replanRequired ? "route_C_elevated_detour" : policyRoute;
     }
 
     protected double roleRiskBias() {

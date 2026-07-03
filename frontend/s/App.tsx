@@ -18,13 +18,13 @@ import type { LocaleCode } from "./types";
 
 function navItems(locale: LocaleCode) {
   return [
-    { to: "/workbench", label: t(locale, { "zh-CN": "任务工作台", "en-US": "Command Center" }) },
-    { to: "/missions", label: t(locale, { "zh-CN": "任务档案", "en-US": "Mission Archive" }) },
+    { to: "/workbench", label: t(locale, { "zh-CN": "总览", "en-US": "Overview" }) },
+    { to: "/workbench#mission", label: t(locale, { "zh-CN": "任务工作台", "en-US": "Mission Desk" }) },
     { to: "/topics", label: t(locale, { "zh-CN": "DDS 网络", "en-US": "DDS Network" }) },
-    { to: "/devices", label: t(locale, { "zh-CN": "设备舰队", "en-US": "Fleet" }) },
-    { to: "/capabilities", label: t(locale, { "zh-CN": "能力面板", "en-US": "Capabilities" }) },
-    { to: "/users", label: t(locale, { "zh-CN": "用户中心", "en-US": "Users" }) },
-    { to: "/settings", label: t(locale, { "zh-CN": "系统设置", "en-US": "Settings" }) }
+    { to: "/devices", label: t(locale, { "zh-CN": "设备 Agent", "en-US": "Device Agents" }) },
+    { to: "/workbench#conflict", label: t(locale, { "zh-CN": "冲突消解", "en-US": "Conflict" }) },
+    { to: "/workbench#policy", label: t(locale, { "zh-CN": "策略评估", "en-US": "Policy Eval" }) },
+    { to: "/workbench#logs", label: t(locale, { "zh-CN": "日志", "en-US": "Logs" }) }
   ];
 }
 
@@ -32,8 +32,11 @@ function Layout({ children }: { children: ReactNode }) {
   const wsConnected = useAppStore((state) => state.wsConnected);
   const streamLogs = useAppStore((state) => state.streamLogs);
   const demoMode = useAppStore((state) => state.demoMode);
+  const debugMode = useAppStore((state) => state.debugMode);
   const setDemoMode = useAppStore((state) => state.setDemoMode);
+  const setDebugMode = useAppStore((state) => state.setDebugMode);
   const lastAction = useAppStore((state) => state.lastAction);
+  const planResult = useAppStore((state) => state.planResult);
   const currentUser = useAppStore((state) => state.currentUser);
   const logout = useAppStore((state) => state.logout);
   const health = useAppStore((state) => state.health);
@@ -77,7 +80,19 @@ function Layout({ children }: { children: ReactNode }) {
             okText="API"
             badText={apiBadgeText}
           />
-          <button className={demoMode ? "ghostButton active" : "ghostButton"} onClick={() => setDemoMode(!demoMode)}>
+          <span className="softBadge">{planResult?.platformPlan?.ddsRuntimeMode ?? planResult?.ddsRuntimeMode ?? "SIMULATED_DDS"}</span>
+          <span className="softBadge">{lastAction || t(locale, { "zh-CN": "待命", "en-US": "Standby" })}</span>
+          <button className={debugMode ? "ghostButton active" : "ghostButton"} onClick={() => setDebugMode(!debugMode)}>
+            {t(locale, { "zh-CN": "调试", "en-US": "Debug" })}
+          </button>
+          <button
+            className={demoMode ? "ghostButton active" : "ghostButton"}
+            onClick={() => {
+              const nextDemoMode = !demoMode;
+              setDemoMode(nextDemoMode);
+              if (nextDemoMode) setDebugMode(false);
+            }}
+          >
             {t(locale, { "zh-CN": "演示", "en-US": "Demo" })}
           </button>
           <button className="ghostButton" onClick={() => setGuideOpen(true)}>

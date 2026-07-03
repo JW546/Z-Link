@@ -166,9 +166,13 @@ public class EvaluationService {
     private double congestionAvoidanceRate(Map<String, Object> scenario, Map<String, Object> finalDecision) {
         Map<String, Object> world = castMap(scenario == null ? null : scenario.get("initialWorldState"));
         double congestion = number(world, "congestionLevel", 0.30);
-        String route = finalDecision == null ? "" : String.valueOf(finalDecision.getOrDefault("finalRoute", ""));
         if (congestion < 0.65) return 1.0;
-        return route.contains("main_road") ? 0.35 : 0.92;
+        double risk = number(finalDecision, "riskScore", number(world, "roadRisk", 0.50));
+        boolean replanning = finalDecision != null && Boolean.TRUE.equals(finalDecision.get("whetherReplanningTriggered"));
+        double confidence = number(finalDecision, "confidence", 0.50);
+        if (risk <= 0.35 && confidence >= 0.65) return 0.92;
+        if (replanning && risk <= 0.55) return 0.78;
+        return 0.35;
     }
 
     private double explanationCompleteness(Map<String, Object> finalDecision) {
