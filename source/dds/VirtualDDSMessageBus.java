@@ -19,6 +19,7 @@ import java.util.function.Consumer;
  */
 public class VirtualDDSMessageBus {
     public static final String TOPIC_INTENT_DSL = "cabin/passenger/intent.dsl";
+    public static final String TOPIC_VEHICLE_STATUS = "vehicle/status/telemetry";
     public static final String TOPIC_ROUTE_SUGGESTION = "vehicle/route/suggestion";
     public static final String TOPIC_DRONE_OBSERVATION = "drone/traffic/observation";
     public static final String TOPIC_ROADSIDE_RISK_EVENT = "roadside/risk/event";
@@ -122,6 +123,7 @@ public class VirtualDDSMessageBus {
 
     private void registerDefaultTopics() {
         registerTopic(TOPIC_INTENT_DSL, "IntentTaskContract", DDSQoS.reliable());
+        registerTopic(TOPIC_VEHICLE_STATUS, "VirtualVehicleStatus", DDSQoS.bestEffort());
         registerTopic(TOPIC_ROUTE_SUGGESTION, "RouteSuggestion", DDSQoS.reliable());
         registerTopic(TOPIC_DRONE_OBSERVATION, "TrafficObservation", DDSQoS.bestEffort());
         registerTopic(TOPIC_ROADSIDE_RISK_EVENT, "RoadsideRiskEvent", DDSQoS.reliable());

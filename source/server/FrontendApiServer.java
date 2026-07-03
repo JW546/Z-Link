@@ -39,6 +39,8 @@ import nlu.NLToDSLToJavaPipeline;
 import policy.PolicyEvaluator;
 import policy.PolicyOptimizationService;
 import simulation.SimulationScenarioService;
+import simulation.SimulationTickResult;
+import simulation.VirtualTrafficSimulationService;
 import utils.AmapRealAPI;
 
 public class FrontendApiServer {
@@ -56,6 +58,7 @@ public class FrontendApiServer {
     private static final DashboardService DASHBOARD = new DashboardService();
     private static final ReportService REPORTS = new ReportService();
     private static final SimulationScenarioService SIMULATION = new SimulationScenarioService();
+    private static final VirtualTrafficSimulationService TRAFFIC_SIMULATION = new VirtualTrafficSimulationService();
     private static final BaselineComparison BASELINE_COMPARISON = new BaselineComparison();
     private static final PolicyEvaluator POLICY_EVALUATOR = new PolicyEvaluator();
     private static final PolicyOptimizationService POLICY_OPTIMIZER = new PolicyOptimizationService();
@@ -99,6 +102,12 @@ public class FrontendApiServer {
         server.createContext("/api/agent/history/clear", withCors(FrontendApiServer::agentHistoryClear));
         server.createContext("/api/agent/dashboard", withCors(FrontendApiServer::agentDashboard));
         server.createContext("/api/agent/report", withCors(FrontendApiServer::agentReport));
+        server.createContext("/api/simulation/scenarios", withCors(FrontendApiServer::simulationScenarios));
+        server.createContext("/api/simulation/start", withCors(FrontendApiServer::simulationStart));
+        server.createContext("/api/simulation/tick", withCors(FrontendApiServer::simulationTick));
+        server.createContext("/api/simulation/stop", withCors(FrontendApiServer::simulationStop));
+        server.createContext("/api/simulation/state", withCors(FrontendApiServer::simulationState));
+        server.createContext("/api/simulation/dds-events", withCors(FrontendApiServer::simulationDdsEvents));
         server.createContext("/api/mission/action", withCors(FrontendApiServer::missionAction));
         server.createContext("/api/device/action", withCors(FrontendApiServer::deviceAction));
         server.createContext("/api/topic/action", withCors(FrontendApiServer::topicAction));
@@ -629,6 +638,51 @@ public class FrontendApiServer {
         response.put("ok", true);
         response.put("missionId", missionId);
         response.put("markdown", REPORTS.buildMarkdown(plan, execution));
+        sendJson(exchange, 200, response);
+    }
+
+    private static void simulationScenarios(HttpExchange exchange) throws IOException {
+        requireMethod(exchange, "GET");
+        Map<String, Object> response = new LinkedHashMap<String, Object>();
+        response.put("ok", true);
+        response.put("scenarios", TRAFFIC_SIMULATION.listScenarios());
+        response.put("simulationBoundary", "structured_2d_virtual_traffic_not_physical_3d_simulation");
+        sendJson(exchange, 200, response);
+    }
+
+    private static void simulationStart(HttpExchange exchange) throws IOException {
+        requireMethod(exchange, "POST");
+        JsonObject body = requestJson(exchange);
+        String scenarioId = body.has("scenarioId") ? body.get("scenarioId").getAsString() : "hospital-emergency";
+        Map<String, Object> response = TRAFFIC_SIMULATION.start(scenarioId);
+        response.put("ok", true);
+        response.put("message", "Virtual traffic collaboration simulation started.");
+        sendJson(exchange, 200, response);
+    }
+
+    private static void simulationTick(HttpExchange exchange) throws IOException {
+        requireMethod(exchange, "POST");
+        SimulationTickResult tick = TRAFFIC_SIMULATION.tick();
+        Map<String, Object> response = tick.toMap();
+        response.put("ok", true);
+        sendJson(exchange, 200, response);
+    }
+
+    private static void simulationStop(HttpExchange exchange) throws IOException {
+        requireMethod(exchange, "POST");
+        sendJson(exchange, 200, TRAFFIC_SIMULATION.stop());
+    }
+
+    private static void simulationState(HttpExchange exchange) throws IOException {
+        requireMethod(exchange, "GET");
+        sendJson(exchange, 200, TRAFFIC_SIMULATION.state());
+    }
+
+    private static void simulationDdsEvents(HttpExchange exchange) throws IOException {
+        requireMethod(exchange, "GET");
+        Map<String, Object> response = new LinkedHashMap<String, Object>();
+        response.put("ok", true);
+        response.put("events", TRAFFIC_SIMULATION.ddsEvents());
         sendJson(exchange, 200, response);
     }
 

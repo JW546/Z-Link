@@ -90,6 +90,179 @@
   --login-brand-copy: rgba(230, 237, 245, 0.8);
 }
 
+.simulationDeck {
+  margin-top: 20px;
+}
+
+.simulationControls {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) repeat(3, auto);
+  gap: 10px;
+  align-items: center;
+  margin: 14px 0;
+}
+
+.simulationControls select {
+  min-height: 38px;
+}
+
+.simulationGrid {
+  display: grid;
+  grid-template-columns: minmax(420px, 1.35fr) minmax(260px, 0.65fr);
+  gap: 14px;
+}
+
+.topologyCanvas {
+  position: relative;
+  min-height: 420px;
+  border: 1px solid var(--border);
+  background:
+    linear-gradient(90deg, rgba(255, 255, 255, 0.05) 1px, transparent 1px),
+    linear-gradient(0deg, rgba(255, 255, 255, 0.05) 1px, transparent 1px),
+    rgba(10, 18, 28, 0.42);
+  background-size: 40px 40px;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.roadEdge {
+  position: absolute;
+  height: 5px;
+  transform-origin: 0 50%;
+  background: rgba(112, 214, 255, 0.68);
+  border-radius: 999px;
+  box-shadow: 0 0 18px rgba(112, 214, 255, 0.22);
+}
+
+.roadEdge.warn {
+  background: rgba(242, 198, 109, 0.82);
+}
+
+.roadEdge.danger {
+  background: rgba(255, 111, 120, 0.86);
+}
+
+.roadNode {
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background: var(--panel);
+  border: 2px solid rgba(255, 255, 255, 0.82);
+  z-index: 2;
+}
+
+.roadNode span {
+  position: absolute;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  min-width: 90px;
+  text-align: center;
+  font-size: 11px;
+  color: var(--muted);
+  white-space: normal;
+}
+
+.simDevice {
+  position: absolute;
+  z-index: 4;
+  transform: translate(-50%, -50%);
+  min-width: 54px;
+  max-width: 82px;
+  min-height: 28px;
+  padding: 5px 7px;
+  border: 1px solid rgba(255, 255, 255, 0.32);
+  border-radius: 8px;
+  font-size: 11px;
+  font-weight: 700;
+  text-align: center;
+  background: rgba(112, 214, 255, 0.18);
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+
+.simDevice.uav {
+  background: rgba(140, 241, 200, 0.18);
+}
+
+.simDevice.rsu {
+  background: rgba(242, 198, 109, 0.22);
+}
+
+.simDevice.peer {
+  background: rgba(187, 164, 255, 0.20);
+}
+
+.simulationSide,
+.simulationEvidenceGrid article {
+  display: grid;
+  gap: 10px;
+}
+
+.simulationSide article,
+.simulationEvidenceGrid article {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.routeStat {
+  display: grid;
+  gap: 4px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.routeStat:last-child {
+  border-bottom: 0;
+}
+
+.routeStat span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.simulationEvidenceGrid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+  margin-top: 14px;
+}
+
+.compactTimeline {
+  display: grid;
+  gap: 8px;
+  max-height: 260px;
+  overflow: auto;
+}
+
+.compactTimeline div {
+  display: grid;
+  gap: 3px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+}
+
+.compactTimeline span,
+.compactTimeline small {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+@media (max-width: 1180px) {
+  .simulationGrid,
+  .simulationEvidenceGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .simulationControls {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
 body[data-theme="light"] {
   color-scheme: light;
   --bg: #edf6ff;

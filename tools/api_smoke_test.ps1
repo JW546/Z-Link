@@ -20,7 +20,7 @@ function Invoke-Json {
 
 $missionText = "Emergency dispatch an unmanned vehicle to hospital, coordinate UAV, RSU and wide-area link."
 $inspectText = "Dispatch UAV to inspect an accident road segment and sync traffic risk."
-$TotalChecks = 30
+$TotalChecks = 35
 $StepIndex = 0
 
 function Write-Step {
@@ -81,6 +81,27 @@ if (-not $topicAction.ok) { throw "topic action failed" }
 Write-Step "POST /agent/simulate"
 $simulation = Invoke-Json POST "/agent/simulate" @{ text = $inspectText }
 if (-not $simulation.executionTimeline -or $simulation.executionTimeline.Count -lt 1) { throw "simulation timeline missing" }
+
+Write-Step "GET /simulation/scenarios"
+$trafficScenarios = Invoke-Json GET "/simulation/scenarios"
+if (-not $trafficScenarios.scenarios -or $trafficScenarios.scenarios.Count -lt 1) { throw "traffic simulation scenarios missing" }
+
+Write-Step "POST /simulation/start"
+$trafficStart = Invoke-Json POST "/simulation/start" @{ scenarioId = "hospital-emergency" }
+if (-not $trafficStart.running -or -not $trafficStart.world) { throw "traffic simulation did not start" }
+
+Write-Step "POST /simulation/tick"
+$trafficTick = Invoke-Json POST "/simulation/tick" @{}
+if (-not $trafficTick.ddsMessages -or $trafficTick.ddsMessages.Count -lt 6) { throw "traffic simulation tick missing DDS messages" }
+if (-not $trafficTick.finalDecision -or [string]::IsNullOrWhiteSpace([string]$trafficTick.finalDecision.route)) { throw "traffic simulation final route missing" }
+
+Write-Step "GET /simulation/state"
+$trafficState = Invoke-Json GET "/simulation/state"
+if (-not $trafficState.world -or -not $trafficState.world.devices -or $trafficState.world.devices.Count -lt 4) { throw "traffic simulation state missing devices" }
+
+Write-Step "GET /simulation/dds-events"
+$trafficEvents = Invoke-Json GET "/simulation/dds-events"
+if (-not $trafficEvents.events -or $trafficEvents.events.Count -lt 6) { throw "traffic simulation DDS events missing" }
 
 Write-Step "POST /agent/execute"
 $execution = Invoke-Json POST "/agent/execute" @{ missionId = $plan.missionId }

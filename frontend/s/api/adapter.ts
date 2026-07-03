@@ -777,6 +777,48 @@ export const backend = {
     );
   },
 
+  async listSimulationScenarios(): Promise<{ scenarios: Record<string, unknown>[] }> {
+    return withFallback(
+      async () => (await api.get("/simulation/scenarios")).data,
+      async () => ({ scenarios: [] })
+    );
+  },
+
+  async startSimulation(scenarioId: string): Promise<Record<string, unknown>> {
+    return withFallback(
+      async () => (await api.post("/simulation/start", { scenarioId })).data,
+      async () => ({ ok: false, running: false, message: "simulation API unavailable" })
+    );
+  },
+
+  async tickSimulation(): Promise<Record<string, unknown>> {
+    return withFallback(
+      async () => (await api.post("/simulation/tick", {})).data,
+      async () => ({ ok: false, ddsMessages: [], finalDecision: {} })
+    );
+  },
+
+  async stopSimulation(): Promise<Record<string, unknown>> {
+    return withFallback(
+      async () => (await api.post("/simulation/stop", {})).data,
+      async () => ({ ok: true, running: false })
+    );
+  },
+
+  async simulationState(): Promise<Record<string, unknown>> {
+    return withFallback(
+      async () => (await api.get("/simulation/state")).data,
+      async () => ({ ok: false, running: false, world: {}, recentDdsMessages: [] })
+    );
+  },
+
+  async simulationDdsEvents(): Promise<{ events: Record<string, unknown>[] }> {
+    return withFallback(
+      async () => (await api.get("/simulation/dds-events")).data,
+      async () => ({ events: [] })
+    );
+  },
+
   async injectFault(payload: { faultType: string; target: string; reason?: string }): Promise<ActionResult & { faults?: Record<string, unknown>[]; devices?: Device[] }> {
     return withFallback(
       async () => (await api.post("/agent/fault/inject", payload)).data,

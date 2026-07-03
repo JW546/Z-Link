@@ -33,3 +33,18 @@
 - Dijkstra 和 Greedy 仍只能作为 baseline。
 - `policy` 模块当前没有真实强化学习训练，不能声称完成 RL/MARL。
 - 新模块目前是低风险外壳和适配层，后续应逐步把旧的大类实现迁移到这些深模块中。
+
+## Virtual Traffic Simulation Boundary
+
+`source/simulation` now contains a structured 2D virtual traffic collaboration module. Its main interface is `VirtualTrafficSimulationService`, which owns:
+
+- `VirtualTrafficWorld`
+- `VirtualRoadNetwork`
+- `VirtualDeviceState` and vehicle/UAV/RSU/neighbor subclasses
+- tick advancement
+- virtual DDS publication through `VirtualDDSMessageBus`
+- Agent advice generation from DDS evidence
+- route planning comparison
+- `ConflictResolver`-based final route selection
+
+This module is for experiments where real unmanned devices cannot be deployed. It should be treated as a communication and decision simulation, not as a physical simulator. It does not model real vehicle dynamics, real sensors, or hardware control. Future adapters may connect the same service seam to SUMO or CARLA while preserving the DDS/Agent/Planner/ConflictResolver chain.

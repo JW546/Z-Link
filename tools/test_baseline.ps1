@@ -119,6 +119,14 @@ Write-Host "[BASELINE] Run DDS message bus test"
 & $javaExe "-Dfile.encoding=UTF-8" -cp $classpath integration.DDSMessageBusTest
 if ($LASTEXITCODE -ne 0) { throw "DDS message bus test failed." }
 
+Write-Host "[BASELINE] Compile virtual traffic simulation test"
+& $javacExe -encoding UTF-8 -sourcepath (Join-Path $repoRoot "source") -cp $classpath -d $outDir (Join-Path $repoRoot "source\integration\VirtualTrafficSimulationServiceTest.java")
+if ($LASTEXITCODE -ne 0) { throw "Virtual traffic simulation test compile failed." }
+
+Write-Host "[BASELINE] Run virtual traffic simulation test"
+& $javaExe "-Dfile.encoding=UTF-8" -cp $classpath integration.VirtualTrafficSimulationServiceTest
+if ($LASTEXITCODE -ne 0) { throw "Virtual traffic simulation test failed." }
+
 Write-Host "[BASELINE] Compile Agent runtime policy test"
 & $javacExe -encoding UTF-8 -sourcepath (Join-Path $repoRoot "source") -cp $classpath -d $outDir (Join-Path $repoRoot "source\integration\AgentRuntimePolicyTest.java")
 if ($LASTEXITCODE -ne 0) { throw "Agent runtime policy test compile failed." }

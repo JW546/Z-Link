@@ -397,6 +397,184 @@ function DashboardOverview({
   );
 }
 
+function VirtualTrafficSimulationPanel({
+  scenarios,
+  state,
+  tickResult,
+  ddsEvents,
+  selectedScenario,
+  setSelectedScenario,
+  onStart,
+  onTick,
+  onStop
+}: {
+  scenarios: DashboardMap[];
+  state: DashboardMap;
+  tickResult: DashboardMap;
+  ddsEvents: DashboardMap[];
+  selectedScenario: string;
+  setSelectedScenario: (value: string) => void;
+  onStart: () => void;
+  onTick: () => void;
+  onStop: () => void;
+}) {
+  const world = asMap(state.world);
+  const effectiveTickResult = Object.keys(tickResult).length ? tickResult : asMap(state.lastTickResult);
+  const roadNetwork = asMap(world.roadNetwork);
+  const nodes = asList(roadNetwork.nodes);
+  const edges = asList(roadNetwork.edges);
+  const routes = asList(roadNetwork.routes);
+  const devices = asList(world.devices);
+  const resultAdvice = asList(effectiveTickResult.agentAdvice);
+  const plannerResult = asMap(effectiveTickResult.plannerResult);
+  const conflict = asMap(effectiveTickResult.conflictResolution);
+  const finalDecision = asMap(effectiveTickResult.finalDecision);
+  const currentTick = asText(state.currentTick ?? effectiveTickResult.tick, "0");
+  const running = Boolean(state.running);
+  const nodeById = new Map(nodes.map((node) => [asText(node.nodeId), node]));
+
+  return (
+    <section id="simulation" className="simulationDeck cardPanel">
+      <div className="panelHeader">
+        <div>
+          <span className="eyebrow">Virtual Traffic Simulation</span>
+          <h3>二维虚拟交通协同仿真环境</h3>
+        </div>
+        <StatusBadge tone={running ? "good" : "warn"}>{running ? `TICK ${currentTick}` : "STOPPED"}</StatusBadge>
+      </div>
+
+      <div className="simulationControls">
+        <select value={selectedScenario} onChange={(event) => setSelectedScenario(event.target.value)}>
+          {scenarios.map((scenario) => (
+            <option key={asText(scenario.scenarioId)} value={asText(scenario.scenarioId)}>
+              {asText(scenario.name, asText(scenario.scenarioId))}
+            </option>
+          ))}
+        </select>
+        <button onClick={onStart}>启动仿真</button>
+        <button className="ghostButton" onClick={onTick} disabled={!running}>推进 tick</button>
+        <button className="dangerButton" onClick={onStop}>停止</button>
+      </div>
+
+      <div className="simulationGrid">
+        <div className="topologyCanvas">
+          {edges.map((edge) => {
+            const from = nodeById.get(asText(edge.fromNodeId));
+            const to = nodeById.get(asText(edge.toNodeId));
+            if (!from || !to) return null;
+            const x1 = asNumber(from.x);
+            const y1 = asNumber(from.y);
+            const x2 = asNumber(to.x);
+            const y2 = asNumber(to.y);
+            const congestion = asNumber(edge.congestionLevel);
+            const risk = asNumber(edge.riskScore);
+            return (
+              <div
+                key={asText(edge.edgeId)}
+                className={risk > 0.55 ? "roadEdge danger" : congestion > 0.6 ? "roadEdge warn" : "roadEdge"}
+                style={{
+                  left: `${x1}%`,
+                  top: `${y1}%`,
+                  width: `${Math.hypot(x2 - x1, y2 - y1)}%`,
+                  transform: `rotate(${Math.atan2(y2 - y1, x2 - x1)}rad)`
+                }}
+                title={`${asText(edge.edgeId)} congestion=${percent(congestion)} risk=${percent(risk)}`}
+              />
+            );
+          })}
+          {nodes.map((node) => (
+            <div key={asText(node.nodeId)} className="roadNode" style={{ left: `${asNumber(node.x)}%`, top: `${asNumber(node.y)}%` }}>
+              <span>{asText(node.label)}</span>
+            </div>
+          ))}
+          {devices.map((device) => (
+            <div
+              key={asText(device.deviceId)}
+              className={`simDevice ${asText(device.deviceType).includes("UAV") ? "uav" : asText(device.deviceType).includes("RSU") ? "rsu" : asText(device.deviceType).includes("NEIGHBOR") ? "peer" : "vehicle"}`}
+              style={{ left: `${asNumber(device.x)}%`, top: `${asNumber(device.y)}%` }}
+              title={`${asText(device.deviceId)} ${asText(device.status)}`}
+            >
+              {asText(device.deviceId).replace("-CQ-", "-")}
+            </div>
+          ))}
+        </div>
+
+        <div className="simulationSide">
+          <article>
+            <h4>当前自然语言任务</h4>
+            <p>{asText(world.naturalLanguageTask, "启动场景后显示任务意图")}</p>
+          </article>
+          <article>
+            <h4>候选路线</h4>
+            {routes.map((route) => (
+              <div key={asText(route.routeId)} className="routeStat">
+                <strong>{asText(route.routeId)}</strong>
+                <span>拥堵 {percent(route.congestionLevel)} / 风险 {percent(route.riskScore)} / {asText(route.estimatedMinutes)} min</span>
+              </div>
+            ))}
+          </article>
+          <article>
+            <h4>最终路线</h4>
+            <strong>{asText(finalDecision.route ?? world.finalRouteId, "等待 tick")}</strong>
+            <p>{short(finalDecision.explanation ?? world.finalExplanation, 180)}</p>
+          </article>
+        </div>
+      </div>
+
+      <div className="simulationEvidenceGrid">
+        <article>
+          <h4>DDS 消息时间线</h4>
+          <div className="compactTimeline">
+            {ddsEvents.slice(-8).map((event, index) => (
+              <div key={`${asText(event.topic)}-${index}`}>
+                <span>{asText(event.topic)}</span>
+                <strong>{asText(event.sourceId)}</strong>
+                <small>{short(asMap(event.payload).explanation ?? asMap(event.payload).missionStatus ?? asMap(event.payload).road_event, 90)}</small>
+              </div>
+            ))}
+          </div>
+        </article>
+        <article>
+          <h4>Agent 建议</h4>
+          <div className="compactTimeline">
+            {resultAdvice.map((advice, index) => (
+              <div key={`${asText(advice.agentId)}-${index}`}>
+                <span>{asText(advice.role)}</span>
+                <strong>{asText(advice.route)}</strong>
+                <small>{short(advice.explanation, 90)}</small>
+              </div>
+            ))}
+          </div>
+        </article>
+        <article>
+          <h4>Planner 路线对比</h4>
+          <div className="compactTimeline">
+            {["dijkstraBaseline", "greedyBaseline", "riskAware", "multiObjective"].map((key) => {
+              const plan = asMap(plannerResult[key]);
+              return (
+                <div key={key}>
+                  <span>{key}</span>
+                  <strong>{asText(plan.routeId, "-")}</strong>
+                  <small>{short(plan.explanation, 90)}</small>
+                </div>
+              );
+            })}
+          </div>
+        </article>
+        <article>
+          <h4>ConflictResolver</h4>
+          <div className="detailGridPanel">
+            <article><span>conflict</span><strong>{asText(conflict.conflictType, "NONE")}</strong></article>
+            <article><span>replan</span><strong>{asText(conflict.whetherReplanningTriggered, "false")}</strong></article>
+            <article><span>confidence</span><strong>{percent(conflict.confidence)}</strong></article>
+          </div>
+          <p>{short(conflict.decisionReason, 180)}</p>
+        </article>
+      </div>
+    </section>
+  );
+}
+
 export function WorkbenchPage() {
   const inputText = useAppStore((state) => state.inputText);
   const parseResult = useAppStore((state) => state.parseResult);
@@ -421,6 +599,11 @@ export function WorkbenchPage() {
   const [voiceMessage, setVoiceMessage] = useState("可直接口述任务。");
   const [selectedTemplate, setSelectedTemplate] = useState("");
   const [scenarios, setScenarios] = useState<DashboardMap[]>([]);
+  const [simulationScenarios, setSimulationScenarios] = useState<DashboardMap[]>([]);
+  const [selectedSimulationScenario, setSelectedSimulationScenario] = useState("hospital-emergency");
+  const [simulationState, setSimulationState] = useState<DashboardMap>({});
+  const [simulationTick, setSimulationTick] = useState<DashboardMap>({});
+  const [simulationDdsEvents, setSimulationDdsEvents] = useState<DashboardMap[]>([]);
   const [dashboard, setDashboard] = useState<DashboardMap>({});
   const [activeTab, setActiveTab] = useState("dsl");
   const [faultType, setFaultType] = useState("DEVICE_OFFLINE");
@@ -434,8 +617,19 @@ export function WorkbenchPage() {
 
   useEffect(() => {
     backend.listScenarios().then((data) => setScenarios(data.scenarios ?? [])).catch(() => setScenarios([]));
+    backend.listSimulationScenarios().then((data) => {
+      const items = data.scenarios ?? [];
+      setSimulationScenarios(items);
+      if (items.length && !selectedSimulationScenario) {
+        setSelectedSimulationScenario(asText(items[0].scenarioId, "hospital-emergency"));
+      }
+    }).catch(() => setSimulationScenarios([]));
+    backend.simulationState().then((data) => {
+      setSimulationState(data);
+      setSimulationDdsEvents(asList(data.recentDdsMessages));
+    }).catch(() => setSimulationState({}));
     backend.dashboard().then((data) => setDashboard(data.dashboard ?? {})).catch(() => setDashboard({}));
-  }, [planResult?.missionId]);
+  }, [planResult?.missionId, selectedSimulationScenario]);
 
   const trace = asMap(planResult?.dashboardTrace);
   const collaboration = planResult?.collaboration;
@@ -517,6 +711,33 @@ export function WorkbenchPage() {
   const generateReport = async () => {
     const result = await backend.report(planResult?.missionId);
     setReportMarkdown(result.markdown ?? "");
+  };
+
+  const refreshSimulation = async () => {
+    const [state, events] = await Promise.all([
+      backend.simulationState(),
+      backend.simulationDdsEvents()
+    ]);
+    setSimulationState(state);
+    setSimulationDdsEvents(events.events ?? asList(state.recentDdsMessages));
+  };
+
+  const startSimulation = async () => {
+    const state = await backend.startSimulation(selectedSimulationScenario || "hospital-emergency");
+    setSimulationState(state);
+    setSimulationTick(asMap(state.lastTickResult));
+    setSimulationDdsEvents(asList(state.recentDdsMessages));
+  };
+
+  const tickSimulation = async () => {
+    const result = await backend.tickSimulation();
+    setSimulationTick(result);
+    await refreshSimulation();
+  };
+
+  const stopSimulation = async () => {
+    await backend.stopSimulation();
+    await refreshSimulation();
   };
 
   const detailsSections = {
@@ -645,6 +866,18 @@ export function WorkbenchPage() {
           <DDSMessageTimeline items={ddsTimeline} compact />
         </aside>
       </section>
+
+      <VirtualTrafficSimulationPanel
+        scenarios={simulationScenarios}
+        state={simulationState}
+        tickResult={simulationTick}
+        ddsEvents={simulationDdsEvents}
+        selectedScenario={selectedSimulationScenario}
+        setSelectedScenario={setSelectedSimulationScenario}
+        onStart={() => void startSimulation()}
+        onTick={() => void tickSimulation()}
+        onStop={() => void stopSimulation()}
+      />
 
       <DetailsTabs active={activeTab} setActive={setActiveTab} debugMode={debugMode} sections={detailsSections} />
 

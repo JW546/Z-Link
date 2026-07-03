@@ -31,3 +31,27 @@
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\test_baseline.ps1
 ```
+
+## Virtual Traffic Collaboration Simulation
+
+The project now includes a structured 2D virtual traffic collaboration environment under `source/simulation`.
+
+This environment is used when real autonomous vehicles, UAVs, RSUs, and neighbor vehicles cannot be deployed. It simulates the project core chain:
+
+Natural-language intent -> DSL task contract -> IDL/DDS publish-subscribe -> multi-device Agent advice -> conflict resolution -> explainable route decision.
+
+Boundary notes:
+
+- It is a structured/2D virtual traffic collaboration simulation for communication and decision experiments.
+- It is not a CARLA, Unity, AirSim, or high-fidelity 3D physical simulation.
+- It does not include real vehicle dynamics, real sensor physics, or real hardware control.
+- It can later be connected to SUMO for traffic-flow simulation or CARLA for richer physical/world simulation.
+
+Simulation API:
+
+- `GET /api/simulation/scenarios`
+- `POST /api/simulation/start`
+- `POST /api/simulation/tick`
+- `POST /api/simulation/stop`
+- `GET /api/simulation/state`
+- `GET /api/simulation/dds-events`
