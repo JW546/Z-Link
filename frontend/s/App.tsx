@@ -6,9 +6,13 @@ import { StatusBadge } from "./components/StatusBadge";
 import { useWsBridge } from "./hooks/useWsBridge";
 import { brandName, guideSteps, localeMeta, t } from "./lib/i18n";
 import { CapabilitiesPage } from "./pages/CapabilitiesPage";
+import { ConflictPage } from "./pages/ConflictPage";
 import { DevicesPage } from "./pages/DevicesPage";
 import { LoginPage } from "./pages/LoginPage";
+import { LogsPage } from "./pages/LogsPage";
 import { MissionsPage } from "./pages/MissionsPage";
+import { OverviewPage } from "./pages/OverviewPage";
+import { PolicyPage } from "./pages/PolicyPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { TopicsPage } from "./pages/TopicsPage";
 import { UsersPage } from "./pages/UsersPage";
@@ -18,13 +22,13 @@ import type { LocaleCode } from "./types";
 
 function navItems(locale: LocaleCode) {
   return [
-    { to: "/workbench", label: t(locale, { "zh-CN": "总览", "en-US": "Overview" }) },
-    { to: "/workbench#mission", label: t(locale, { "zh-CN": "任务工作台", "en-US": "Mission Desk" }) },
-    { to: "/topics", label: t(locale, { "zh-CN": "DDS 网络", "en-US": "DDS Network" }) },
-    { to: "/devices", label: t(locale, { "zh-CN": "设备 Agent", "en-US": "Device Agents" }) },
-    { to: "/workbench#conflict", label: t(locale, { "zh-CN": "冲突消解", "en-US": "Conflict" }) },
-    { to: "/workbench#policy", label: t(locale, { "zh-CN": "策略评估", "en-US": "Policy Eval" }) },
-    { to: "/workbench#logs", label: t(locale, { "zh-CN": "日志", "en-US": "Logs" }) }
+    { to: "/overview", label: t(locale, { "zh-CN": "总览", "en-US": "Overview" }), matches: ["/overview"] },
+    { to: "/workbench", label: t(locale, { "zh-CN": "任务工作台", "en-US": "Mission Desk" }), matches: ["/workbench"] },
+    { to: "/topics", label: t(locale, { "zh-CN": "DDS 网络", "en-US": "DDS Network" }), matches: ["/topics", "/dds"] },
+    { to: "/devices", label: t(locale, { "zh-CN": "设备 Agent", "en-US": "Device Agents" }), matches: ["/devices", "/agents"] },
+    { to: "/conflict", label: t(locale, { "zh-CN": "冲突消解", "en-US": "Conflict" }), matches: ["/conflict"] },
+    { to: "/policy", label: t(locale, { "zh-CN": "策略评估", "en-US": "Policy Eval" }), matches: ["/policy"] },
+    { to: "/logs", label: t(locale, { "zh-CN": "日志", "en-US": "Logs" }), matches: ["/logs"] }
   ];
 }
 
@@ -42,6 +46,7 @@ function Layout({ children }: { children: ReactNode }) {
   const health = useAppStore((state) => state.health);
   const preferences = useAppStore((state) => state.preferences);
   const markGuideCompleted = useAppStore((state) => state.markGuideCompleted);
+  const location = useLocation();
   const [logsOpen, setLogsOpen] = useState(false);
   const [guideOpen, setGuideOpen] = useState(!preferences.guideCompleted);
   const locale = preferences.locale;
@@ -61,7 +66,7 @@ function Layout({ children }: { children: ReactNode }) {
   return (
     <div className="appShell">
       <header className="topbar">
-        <Link className="brandBlock" to="/workbench">
+        <Link className="brandBlock" to="/overview">
           <img className="brandLogo" src="/z-link-logo.png" alt="Z-Link logo" />
           <div>
             <strong>{brand.cn}</strong>
@@ -117,7 +122,11 @@ function Layout({ children }: { children: ReactNode }) {
 
           <div className="sidebarLinks">
             {nav.map((item) => (
-              <NavLink key={item.to} to={item.to} className="sidebarLink">
+              <NavLink
+                key={item.to}
+                to={item.to}
+                className={() => item.matches.includes(location.pathname) ? "sidebarLink active" : "sidebarLink"}
+              >
                 <span>{item.label}</span>
               </NavLink>
             ))}
@@ -208,14 +217,21 @@ export default function App() {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
-      <Route path="/" element={<Navigate to="/workbench" replace />} />
+      <Route path="/" element={<Navigate to="/overview" replace />} />
+      <Route path="/overview" element={<RequireAuth><OverviewPage /></RequireAuth>} />
       <Route path="/workbench" element={<RequireAuth><WorkbenchPage /></RequireAuth>} />
       <Route path="/missions" element={<RequireAuth><MissionsPage /></RequireAuth>} />
       <Route path="/topics" element={<RequireAuth><TopicsPage /></RequireAuth>} />
+      <Route path="/dds" element={<RequireAuth><TopicsPage /></RequireAuth>} />
       <Route path="/devices" element={<RequireAuth><DevicesPage /></RequireAuth>} />
+      <Route path="/agents" element={<RequireAuth><DevicesPage /></RequireAuth>} />
+      <Route path="/conflict" element={<RequireAuth><ConflictPage /></RequireAuth>} />
+      <Route path="/policy" element={<RequireAuth><PolicyPage /></RequireAuth>} />
+      <Route path="/logs" element={<RequireAuth><LogsPage /></RequireAuth>} />
       <Route path="/capabilities" element={<RequireAuth><CapabilitiesPage /></RequireAuth>} />
       <Route path="/users" element={<RequireAuth><UsersPage /></RequireAuth>} />
       <Route path="/settings" element={<RequireAuth><SettingsPage /></RequireAuth>} />
+      <Route path="*" element={<Navigate to="/overview" replace />} />
     </Routes>
   );
 }
