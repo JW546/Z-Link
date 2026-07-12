@@ -2,6 +2,21 @@ package dds;
 
 import chongqing.*;
 import urban.*;
+import intentdds.urban.QosObservation;
+import intentdds.urban.QosObservationDataReader;
+import intentdds.urban.QosObservationDataWriter;
+import intentdds.urban.QosObservationSeq;
+import intentdds.urban.QosObservationTypeSupport;
+import intentdds.urban.RouteAdvice;
+import intentdds.urban.RouteAdviceDataReader;
+import intentdds.urban.RouteAdviceDataWriter;
+import intentdds.urban.RouteAdviceSeq;
+import intentdds.urban.RouteAdviceTypeSupport;
+import intentdds.urban.RouteDecision;
+import intentdds.urban.RouteDecisionDataReader;
+import intentdds.urban.RouteDecisionDataWriter;
+import intentdds.urban.RouteDecisionSeq;
+import intentdds.urban.RouteDecisionTypeSupport;
 
 import com.rti.dds.domain.*;
 import com.rti.dds.infrastructure.*;
@@ -18,6 +33,9 @@ import java.util.concurrent.atomic.AtomicLong;
  * @paper_ref 第4章 4.2 三层无缝集成 -> IDL层实现
  */
 public class DDSManager {
+    public static final String TOPIC_ROUTE_ADVICE = "urban/route/advice.dsl";
+    public static final String TOPIC_ROUTE_DECISION = "urban/route/final_decision.dsl";
+    public static final String TOPIC_QOS_OBSERVATION = "urban/qos/observation.dsl";
     
     private static DDSManager instance;
     private DomainParticipant participant = null;
@@ -97,6 +115,9 @@ public class DDSManager {
             EmergencyAlertTypeSupport.register_type(participant, EmergencyAlertTypeSupport.get_type_name());
             SwarmMissionTypeSupport.register_type(participant, SwarmMissionTypeSupport.get_type_name());
             EnvironmentPerceptionTypeSupport.register_type(participant, EnvironmentPerceptionTypeSupport.get_type_name());
+            RouteAdviceTypeSupport.register_type(participant, RouteAdviceTypeSupport.get_type_name());
+            RouteDecisionTypeSupport.register_type(participant, RouteDecisionTypeSupport.get_type_name());
+            QosObservationTypeSupport.register_type(participant, QosObservationTypeSupport.get_type_name());
             
             participant.get_default_publisher_qos(pubQos);
             participant.get_default_subscriber_qos(subQos);
@@ -414,6 +435,110 @@ public class DDSManager {
         if (!connected) connect();
         subscribeTopic("urban/environment/perception", EnvironmentPerception.class, callback);
     }
+
+    // ==================== Intent Collaboration RouteAdvice ====================
+    public long publishRouteAdvice(RouteAdvice advice) {
+        if (!connected) return -1;
+        try {
+            RouteAdviceDataWriter writer = (RouteAdviceDataWriter) writers.computeIfAbsent(
+                TOPIC_ROUTE_ADVICE, k -> createWriter(TOPIC_ROUTE_ADVICE, RouteAdviceTypeSupport.get_type_name()));
+            if (writer == null) return -1;
+            long seq = sampleSequence.incrementAndGet();
+            advice.header.sample_sequence = (int) seq;
+
+            long sendTimeNs = System.nanoTime();
+            writer.write(advice, InstanceHandle_t.HANDLE_NIL);
+
+            System.out.println("[DDS→] RouteAdvice[" + advice.source_type + "] route=" + advice.route_candidate);
+            if (loggingEnabled && logger != null) {
+                String summary = String.format("source=%s route=%s risk=%.2f confidence=%.2f",
+                    advice.source_type, advice.route_candidate, advice.risk_score, advice.confidence);
+                logger.logPublish(TOPIC_ROUTE_ADVICE, summary, estimateSize(advice), sendTimeNs);
+            }
+            if (metrics != null) metrics.recordPublish(TOPIC_ROUTE_ADVICE, estimateSize(advice));
+            return seq;
+        } catch (Exception e) {
+            System.err.println("[DDS] RouteAdvice发布失败: " + e.getMessage());
+            if (logger != null) logger.error("DDSManager", "RouteAdvice发布失败: " + e.getMessage());
+            if (metrics != null) metrics.recordError(TOPIC_ROUTE_ADVICE);
+            return -1;
+        }
+    }
+
+    public void subscribeRouteAdvice(DataCallback<RouteAdvice> callback) {
+        if (!connected) connect();
+        subscribeTopic(TOPIC_ROUTE_ADVICE, RouteAdvice.class, callback);
+    }
+
+    // ==================== Intent Collaboration RouteDecision ====================
+    public long publishRouteDecision(RouteDecision decision) {
+        if (!connected) return -1;
+        try {
+            RouteDecisionDataWriter writer = (RouteDecisionDataWriter) writers.computeIfAbsent(
+                TOPIC_ROUTE_DECISION, k -> createWriter(TOPIC_ROUTE_DECISION, RouteDecisionTypeSupport.get_type_name()));
+            if (writer == null) return -1;
+            long seq = sampleSequence.incrementAndGet();
+            decision.header.sample_sequence = (int) seq;
+
+            long sendTimeNs = System.nanoTime();
+            writer.write(decision, InstanceHandle_t.HANDLE_NIL);
+
+            System.out.println("[DDS→] RouteDecision[" + decision.decision_owner + "] route=" + decision.final_route);
+            if (loggingEnabled && logger != null) {
+                String summary = String.format("owner=%s route=%s risk=%.2f confidence=%.2f",
+                    decision.decision_owner, decision.final_route, decision.final_risk_score, decision.confidence);
+                logger.logPublish(TOPIC_ROUTE_DECISION, summary, estimateSize(decision), sendTimeNs);
+            }
+            if (metrics != null) metrics.recordPublish(TOPIC_ROUTE_DECISION, estimateSize(decision));
+            return seq;
+        } catch (Exception e) {
+            System.err.println("[DDS] RouteDecision发布失败: " + e.getMessage());
+            if (logger != null) logger.error("DDSManager", "RouteDecision发布失败: " + e.getMessage());
+            if (metrics != null) metrics.recordError(TOPIC_ROUTE_DECISION);
+            return -1;
+        }
+    }
+
+    public void subscribeRouteDecision(DataCallback<RouteDecision> callback) {
+        if (!connected) connect();
+        subscribeTopic(TOPIC_ROUTE_DECISION, RouteDecision.class, callback);
+    }
+
+    // ==================== Intent Collaboration QosObservation ====================
+    public long publishQosObservation(QosObservation observation) {
+        if (!connected) return -1;
+        try {
+            QosObservationDataWriter writer = (QosObservationDataWriter) writers.computeIfAbsent(
+                TOPIC_QOS_OBSERVATION, k -> createWriter(TOPIC_QOS_OBSERVATION, QosObservationTypeSupport.get_type_name()));
+            if (writer == null) return -1;
+            long seq = sampleSequence.incrementAndGet();
+            observation.header.sample_sequence = (int) seq;
+
+            long sendTimeNs = System.nanoTime();
+            writer.write(observation, InstanceHandle_t.HANDLE_NIL);
+
+            System.out.println("[DDS→] QosObservation[" + observation.qos_profile + "] delivered="
+                + observation.delivered_ratio);
+            if (loggingEnabled && logger != null) {
+                String summary = String.format("profile=%s delivered=%d dropped=%d latency=%.1fms",
+                    observation.qos_profile, observation.delivered_count,
+                    observation.dropped_count, observation.average_latency_ms);
+                logger.logPublish(TOPIC_QOS_OBSERVATION, summary, estimateSize(observation), sendTimeNs);
+            }
+            if (metrics != null) metrics.recordPublish(TOPIC_QOS_OBSERVATION, estimateSize(observation));
+            return seq;
+        } catch (Exception e) {
+            System.err.println("[DDS] QosObservation发布失败: " + e.getMessage());
+            if (logger != null) logger.error("DDSManager", "QosObservation发布失败: " + e.getMessage());
+            if (metrics != null) metrics.recordError(TOPIC_QOS_OBSERVATION);
+            return -1;
+        }
+    }
+
+    public void subscribeQosObservation(DataCallback<QosObservation> callback) {
+        if (!connected) connect();
+        subscribeTopic(TOPIC_QOS_OBSERVATION, QosObservation.class, callback);
+    }
     
     // ==================== 辅助方法 ====================
     
@@ -432,6 +557,9 @@ public class DDSManager {
             if (obj instanceof VehicleData) return 320;
             if (obj instanceof TrafficFlow) return 280;
             if (obj instanceof EnvironmentPerception) return 260;
+            if (obj instanceof RouteAdvice) return 768;
+            if (obj instanceof RouteDecision) return 768;
+            if (obj instanceof QosObservation) return 320;
             return 256;
         } catch (Exception e) {
             return 256;
@@ -495,6 +623,7 @@ public class DDSManager {
             
             DataWriterQos dwQos = new DataWriterQos();
             publisher.get_default_datawriter_qos(dwQos);
+            applyTopicQos(topicNameStr, dwQos);
             System.out.println("[DDS] 创建 DataWriter");
             return publisher.create_datawriter(topic, dwQos, null, StatusKind.STATUS_MASK_NONE);
         } catch (Exception e) { System.err.println("[DDS] 创建 DataWriter 失败: " + e.getMessage()); return null; }
@@ -510,6 +639,7 @@ public class DDSManager {
                 
                 DataReaderQos drQos = new DataReaderQos();
                 subscriber.get_default_datareader_qos(drQos);
+                applyTopicQos(topicName, drQos);
                 DataReader reader = subscriber.create_datareader(topic, drQos, null, StatusKind.STATUS_MASK_NONE);
                 readerCallbacks.put(topicName, new CopyOnWriteArrayList<>());
                 startReaderThread(topicName, reader, dataClass);
@@ -546,6 +676,55 @@ public class DDSManager {
             }
         }
     }
+
+    private void applyTopicQos(String topicName, DataWriterQos qos) {
+        applyReliabilityAndHistory(topicName, qos.reliability, qos.history, qos.deadline.period, qos.latency_budget.duration);
+        if (isSensorStreamTopic(topicName)) {
+            qos.lifespan.duration.copy_from(Duration_t.from_millis(900));
+        } else if (isIntentCollaborationTopic(topicName)) {
+            qos.lifespan.duration.copy_from(Duration_t.from_millis(2500));
+        }
+    }
+
+    private void applyTopicQos(String topicName, DataReaderQos qos) {
+        applyReliabilityAndHistory(topicName, qos.reliability, qos.history, qos.deadline.period, qos.latency_budget.duration);
+    }
+
+    private void applyReliabilityAndHistory(
+        String topicName,
+        ReliabilityQosPolicy reliability,
+        HistoryQosPolicy history,
+        Duration_t deadline,
+        Duration_t latencyBudget) {
+
+        history.kind = HistoryQosPolicyKind.KEEP_LAST_HISTORY_QOS;
+        if (isSensorStreamTopic(topicName)) {
+            reliability.kind = ReliabilityQosPolicyKind.BEST_EFFORT_RELIABILITY_QOS;
+            history.depth = 3;
+            deadline.copy_from(Duration_t.from_millis(100));
+            latencyBudget.copy_from(Duration_t.from_millis(80));
+        } else if (isIntentCollaborationTopic(topicName)) {
+            reliability.kind = ReliabilityQosPolicyKind.RELIABLE_RELIABILITY_QOS;
+            history.depth = 10;
+            deadline.copy_from(Duration_t.from_millis(300));
+            latencyBudget.copy_from(Duration_t.from_millis(80));
+        }
+    }
+
+    private boolean isSensorStreamTopic(String topicName) {
+        return "urban/environment/perception".equals(topicName)
+            || "urban/vehicle/data".equals(topicName)
+            || "chongqing/traffic/flow".equals(topicName);
+    }
+
+    private boolean isIntentCollaborationTopic(String topicName) {
+        return TOPIC_ROUTE_ADVICE.equals(topicName)
+            || TOPIC_ROUTE_DECISION.equals(topicName)
+            || TOPIC_QOS_OBSERVATION.equals(topicName)
+            || "chongqing/mission/command".equals(topicName)
+            || "chongqing/emergency/alert".equals(topicName)
+            || "chongqing/emergency/status".equals(topicName);
+    }
     
     private String getTypeName(Class<?> dataClass) {
         if (dataClass == EmergencyStatus.class) return EmergencyStatusTypeSupport.get_type_name();
@@ -554,6 +733,9 @@ public class DDSManager {
         if (dataClass == VehicleData.class) return VehicleDataTypeSupport.get_type_name();
         if (dataClass == TrafficFlow.class) return TrafficFlowTypeSupport.get_type_name();
         if (dataClass == EnvironmentPerception.class) return EnvironmentPerceptionTypeSupport.get_type_name();
+        if (dataClass == RouteAdvice.class) return RouteAdviceTypeSupport.get_type_name();
+        if (dataClass == RouteDecision.class) return RouteDecisionTypeSupport.get_type_name();
+        if (dataClass == QosObservation.class) return QosObservationTypeSupport.get_type_name();
         return "";
     }
     
@@ -573,6 +755,12 @@ public class DDSManager {
                         pollEmergencyAlert(topicName, (EmergencyAlertDataReader) reader);
                     } else if (dataClass == EnvironmentPerception.class) {
                         pollEnvironmentPerception(topicName, (EnvironmentPerceptionDataReader) reader);
+                    } else if (dataClass == RouteAdvice.class) {
+                        pollRouteAdvice(topicName, (RouteAdviceDataReader) reader);
+                    } else if (dataClass == RouteDecision.class) {
+                        pollRouteDecision(topicName, (RouteDecisionDataReader) reader);
+                    } else if (dataClass == QosObservation.class) {
+                        pollQosObservation(topicName, (QosObservationDataReader) reader);
                     }
                     Thread.sleep(50);
                 }
@@ -677,6 +865,63 @@ public class DDSManager {
 
     private void pollEnvironmentPerception(String topicName, EnvironmentPerceptionDataReader reader) {
         EnvironmentPerceptionSeq dataSeq = new EnvironmentPerceptionSeq();
+        SampleInfoSeq infoSeq = new SampleInfoSeq();
+        try {
+            reader.take(dataSeq, infoSeq, ResourceLimitsQosPolicy.LENGTH_UNLIMITED,
+                SampleStateKind.ANY_SAMPLE_STATE,
+                ViewStateKind.ANY_VIEW_STATE,
+                InstanceStateKind.ANY_INSTANCE_STATE);
+            for (int i = 0; i < dataSeq.size(); i++) {
+                if (infoSeq.get(i).valid_data) {
+                    dispatchCallback(topicName, dataSeq.get(i));
+                }
+            }
+        } catch (RETCODE_NO_DATA ignored) {
+        } finally {
+            reader.return_loan(dataSeq, infoSeq);
+        }
+    }
+
+    private void pollRouteAdvice(String topicName, RouteAdviceDataReader reader) {
+        RouteAdviceSeq dataSeq = new RouteAdviceSeq();
+        SampleInfoSeq infoSeq = new SampleInfoSeq();
+        try {
+            reader.take(dataSeq, infoSeq, ResourceLimitsQosPolicy.LENGTH_UNLIMITED,
+                SampleStateKind.ANY_SAMPLE_STATE,
+                ViewStateKind.ANY_VIEW_STATE,
+                InstanceStateKind.ANY_INSTANCE_STATE);
+            for (int i = 0; i < dataSeq.size(); i++) {
+                if (infoSeq.get(i).valid_data) {
+                    dispatchCallback(topicName, dataSeq.get(i));
+                }
+            }
+        } catch (RETCODE_NO_DATA ignored) {
+        } finally {
+            reader.return_loan(dataSeq, infoSeq);
+        }
+    }
+
+    private void pollRouteDecision(String topicName, RouteDecisionDataReader reader) {
+        RouteDecisionSeq dataSeq = new RouteDecisionSeq();
+        SampleInfoSeq infoSeq = new SampleInfoSeq();
+        try {
+            reader.take(dataSeq, infoSeq, ResourceLimitsQosPolicy.LENGTH_UNLIMITED,
+                SampleStateKind.ANY_SAMPLE_STATE,
+                ViewStateKind.ANY_VIEW_STATE,
+                InstanceStateKind.ANY_INSTANCE_STATE);
+            for (int i = 0; i < dataSeq.size(); i++) {
+                if (infoSeq.get(i).valid_data) {
+                    dispatchCallback(topicName, dataSeq.get(i));
+                }
+            }
+        } catch (RETCODE_NO_DATA ignored) {
+        } finally {
+            reader.return_loan(dataSeq, infoSeq);
+        }
+    }
+
+    private void pollQosObservation(String topicName, QosObservationDataReader reader) {
+        QosObservationSeq dataSeq = new QosObservationSeq();
         SampleInfoSeq infoSeq = new SampleInfoSeq();
         try {
             reader.take(dataSeq, infoSeq, ResourceLimitsQosPolicy.LENGTH_UNLIMITED,

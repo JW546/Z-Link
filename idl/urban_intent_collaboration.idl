@@ -4,104 +4,106 @@
 
 module urban {
 
-  typedef sequence<string> StringSeq;
+  typedef string<64> IdString;
+  typedef string<256> TextString;
+  typedef string<2048> ContractString;
 
   struct Header {
-    string message_id;
-    string source_id;
-    string target_id;
-    string timestamp_iso8601;
-    string frame_id;
-    unsigned long sequence;
+    IdString message_id;
+    IdString source_id;
+    IdString target_id;
+    IdString timestamp_iso8601;
+    IdString frame_id;
+    unsigned long sample_sequence;
   };
 
   struct MissionCommand {
     Header header;
-    string natural_language;
-    string destination;
-    string urgency;          // LOW, MEDIUM, HIGH
-    string preference;       // TIME_FIRST, SAFE_FIRST, BALANCED
-    StringSeq requested_capabilities;
-    StringSeq publish_topics;
-    StringSeq subscribe_topics;
-    string dsl_contract;
+    TextString natural_language;
+    TextString destination;
+    IdString urgency;          // LOW, MEDIUM, HIGH
+    IdString preference;       // TIME_FIRST, SAFE_FIRST, BALANCED
+    sequence<TextString, 32> requested_capabilities;
+    sequence<TextString, 32> publish_topics;
+    sequence<TextString, 32> subscribe_topics;
+    ContractString dsl_contract;
   };
 
   struct VehicleTelemetry {
     Header header;
-    string vehicle_role;     // EGO_AUTONOMOUS_VEHICLE, PEER_AUTONOMOUS_VEHICLE
+    IdString vehicle_role;     // EGO_AUTONOMOUS_VEHICLE, PEER_AUTONOMOUS_VEHICLE
     double position_x_m;
     double position_y_m;
     double speed_mps;
     double heading_deg;
     double battery_pct;
     double road_friction;
-    string traffic_signal;
-    string road_event;
+    IdString traffic_signal;
+    TextString road_event;
   };
 
   struct EnvironmentPerception {
     Header header;
-    string observer_type;    // UAV, RSU, VEHICLE, BACKBONE
-    string event_type;
+    IdString observer_type;    // UAV, RSU, VEHICLE, BACKBONE
+    IdString event_type;
     double confidence;
     double risk_score;
     double visibility_m;
     double wind_speed_mps;
     unsigned long pedestrian_count;
-    string evidence_summary;
+    TextString evidence_summary;
   };
 
   struct RouteAdvice {
     Header header;
-    string source_type;      // EGO_VEHICLE, PEER_VEHICLE, UAV, RSU, COMPLIANT_BACKBONE
-    string destination;
-    string route_candidate;
+    IdString source_type;      // EGO_VEHICLE, PEER_VEHICLE, UAV, RSU, COMPLIANT_BACKBONE
+    TextString destination;
+    IdString route_candidate;
     double risk_score;
     double confidence;
     double estimated_time_min;
-    string advice_reason;
-    StringSeq required_topics;
+    TextString advice_reason;
+    sequence<TextString, 32> required_topics;
   };
 
   struct RsuRoadEvent {
     Header header;
-    string road_event;
-    string traffic_signal;
+    TextString road_event;
+    IdString traffic_signal;
     unsigned long pedestrian_count;
     double rsu_load;
-    string recommended_route;
+    IdString recommended_route;
     double risk_score;
     double confidence;
   };
 
   struct CompliantNetworkContext {
     Header header;
-    string link_mode;        // approved_satcom, 5g_v2x, industry_private_network, rsu_backhaul
+    IdString link_mode;        // approved_satcom, 5g_v2x, industry_private_network, rsu_backhaul
     double link_health;
     double private_5g_signal;
     double rsu_load;
     double expected_latency_ms;
-    string recommended_route;
+    IdString recommended_route;
     double risk_score;
     double confidence;
   };
 
   struct RouteDecision {
     Header header;
-    string decision_owner;
-    string autonomy_mode;    // vehicle_self_decision_after_dds_consensus
-    string final_route;
+    IdString decision_owner;
+    IdString autonomy_mode;    // vehicle_self_decision_after_dds_consensus
+    IdString final_route;
     double final_risk_score;
     double confidence;
-    StringSeq advice_sources;
-    string passenger_explanation;
-    string fusion_reason;
+    sequence<TextString, 32> advice_sources;
+    TextString passenger_explanation;
+    TextString fusion_reason;
   };
 
   struct QosObservation {
     Header header;
-    string qos_profile;      // reliable_keep_last, best_effort_sensor_stream
+    IdString qos_profile;      // reliable_keep_last, best_effort_sensor_stream
     unsigned long published_count;
     unsigned long delivered_count;
     unsigned long dropped_count;
@@ -113,9 +115,9 @@ module urban {
 
   struct RouteFusionExperimentResult {
     Header header;
-    string qos_mode;
-    string latency_profile;
-    string conflict_profile;
+    IdString qos_mode;
+    IdString latency_profile;
+    IdString conflict_profile;
     unsigned long total_advice;
     unsigned long delivered_advice;
     unsigned long dropped_advice;
@@ -124,7 +126,7 @@ module urban {
     double average_latency_ms;
     double delivered_ratio;
     double route_stability;
-    string final_route;
+    IdString final_route;
     double final_risk_score;
     double confidence;
   };
