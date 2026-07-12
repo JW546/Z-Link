@@ -1,5 +1,10 @@
 param(
-  [string]$RtiHome = "D:\DDS\rti_connext_dds-7.6.0"
+  [string]$RtiHome = "D:\DDS\rti_connext_dds-7.6.0",
+  [ValidateSet("loopback", "receive", "send")]
+  [string]$Mode = "loopback",
+  [int]$DomainId = 43,
+  [string]$SourceId = "UAV-CQ-007",
+  [string]$TargetId = "CAR-CQ-001"
 )
 
 $ErrorActionPreference = "Stop"
@@ -66,8 +71,10 @@ $classpath = @(
   (Join-Path $repoRoot "lib\*")
 ) -join ";"
 
-Write-Host "[REAL-DDS] Compile DDSManager and real DDS intent test"
-& $javacExe -encoding UTF-8 -cp $classpath -sourcepath "$repoRoot\source;$repoRoot\interfaces" -d $outDir (Join-Path $repoRoot "source\integration\RealDDSIntentTypesTest.java")
+Write-Host "[REAL-DDS] Compile DDSManager and real DDS demos"
+& $javacExe -encoding UTF-8 -cp $classpath -sourcepath "$repoRoot\source;$repoRoot\interfaces" -d $outDir `
+  (Join-Path $repoRoot "source\integration\RealDDSIntentTypesTest.java") `
+  (Join-Path $repoRoot "source\integration\RealDDSIntentPeerDemo.java")
 if ($LASTEXITCODE -ne 0) { throw "compile failed." }
 
 $env:PATH = (Join-Path $repoRoot "lib") + ";" + $rtiLib + ";" + $env:PATH
@@ -76,9 +83,13 @@ $javaArgs = @(
   "-Djava.library.path=$(Join-Path $repoRoot 'lib');$rtiLib",
   "-cp",
   $classpath,
-  "integration.RealDDSIntentTypesTest"
+  $(if ($Mode -eq "loopback") { "integration.RealDDSIntentTypesTest" } else { "integration.RealDDSIntentPeerDemo" })
 )
 
-Write-Host "[REAL-DDS] Run real RTI DDS loopback test"
+if ($Mode -ne "loopback") {
+  $javaArgs += @($Mode, "$DomainId", $SourceId, $TargetId)
+}
+
+Write-Host "[REAL-DDS] Run real RTI DDS mode=$Mode"
 & $javaExe @javaArgs
 if ($LASTEXITCODE -ne 0) { throw "real DDS intent test failed." }
