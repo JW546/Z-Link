@@ -819,6 +819,27 @@ export const backend = {
     );
   },
 
+  async runtimeProfile(): Promise<Record<string, unknown>> {
+    return withFallback(
+      async () => (await api.get("/runtime/profile")).data,
+      async () => ({ ok: false, runtimeMode: "unavailable", agents: [] })
+    );
+  },
+
+  async runtimeTopics(): Promise<{ topics: Record<string, unknown>[] }> {
+    return withFallback(
+      async () => (await api.get("/runtime/topics")).data,
+      async () => ({ topics: [] })
+    );
+  },
+
+  async runRuntime(intervalMs = 500, ticks = 6): Promise<Record<string, unknown>> {
+    return withFallback(
+      async () => (await api.post("/runtime/run", { intervalMs, ticks })).data,
+      async () => ({ ok: false, history: [], finalDecision: {}, nativeProtocolFrames: [] })
+    );
+  },
+
   async injectFault(payload: { faultType: string; target: string; reason?: string }): Promise<ActionResult & { faults?: Record<string, unknown>[]; devices?: Device[] }> {
     return withFallback(
       async () => (await api.post("/agent/fault/inject", payload)).data,

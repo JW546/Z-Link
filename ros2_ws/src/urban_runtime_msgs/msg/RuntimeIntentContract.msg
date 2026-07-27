@@ -1,0 +1,9 @@
+string message_id
+string source_id
+string target_id
+uint64 timestamp_ms
+string mission_id
+string natural_language
+string dsl_contract
+string[] required_agents
+uint32 default_status_interval_ms

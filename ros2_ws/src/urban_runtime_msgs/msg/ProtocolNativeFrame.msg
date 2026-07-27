@@ -1,0 +1,10 @@
+string message_id
+string source_id
+string target_id
+uint64 timestamp_ms
+string agent_id
+string role
+string protocol
+string unified_topic
+string native_payload_json
+string compatibility_note

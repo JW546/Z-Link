@@ -20,7 +20,7 @@ function Invoke-Json {
 
 $missionText = "Emergency dispatch an unmanned vehicle to hospital, coordinate UAV, RSU and wide-area link."
 $inspectText = "Dispatch UAV to inspect an accident road segment and sync traffic risk."
-$TotalChecks = 35
+$TotalChecks = 40
 $StepIndex = 0
 
 function Write-Step {
@@ -102,6 +102,30 @@ if (-not $trafficState.world -or -not $trafficState.world.devices -or $trafficSt
 Write-Step "GET /simulation/dds-events"
 $trafficEvents = Invoke-Json GET "/simulation/dds-events"
 if (-not $trafficEvents.events -or $trafficEvents.events.Count -lt 6) { throw "traffic simulation DDS events missing" }
+
+Write-Step "GET /runtime/profile"
+$runtimeProfile = Invoke-Json GET "/runtime/profile"
+if (-not $runtimeProfile.ok -or -not $runtimeProfile.coreSystemWithoutFrontend -or $runtimeProfile.defaultStatusIntervalMs -ne 500) { throw "runtime profile missing communication config" }
+
+Write-Step "GET /runtime/topics"
+$runtimeTopics = Invoke-Json GET "/runtime/topics"
+if (-not $runtimeTopics.topics -or $runtimeTopics.topics.Count -lt 7) { throw "runtime topics missing IDL bindings" }
+
+Write-Step "POST /runtime/run"
+$runtimeRun = Invoke-Json POST "/runtime/run" @{ intervalMs = 80; ticks = 4 }
+if (-not $runtimeRun.ok -or $runtimeRun.messageCount -lt 14) { throw "runtime run did not produce enough messages" }
+if (-not $runtimeRun.finalDecision -or $runtimeRun.finalDecision.payload.selectedStrategy -ne "cooperative_score_policy") { throw "runtime final decision missing cooperative strategy" }
+if (-not $runtimeRun.nativeProtocolFrames -or $runtimeRun.nativeProtocolFrames.Count -lt 3) { throw "runtime native protocol frames missing" }
+if (-not $runtimeRun.replanningRequests -or $runtimeRun.replanningRequests.Count -lt 1) { throw "runtime replanning request missing" }
+
+Write-Step "GET /runtime/ros2/profile"
+$ros2Profile = Invoke-Json GET "/runtime/ros2/profile"
+if (-not $ros2Profile.ok -or -not $ros2Profile.topicBindings -or $ros2Profile.topicBindings.Count -lt 7) { throw "ROS2 profile missing topic bindings" }
+
+Write-Step "POST /runtime/ros2/bridge-plan"
+$ros2Plan = Invoke-Json POST "/runtime/ros2/bridge-plan" @{ intervalMs = 80; ticks = 4 }
+if (-not $ros2Plan.ok -or -not $ros2Plan.publishCommands -or $ros2Plan.publishCommands.Count -lt 14) { throw "ROS2 bridge plan missing publish commands" }
+if (-not ($ros2Plan.publishCommands | Where-Object { $_.rosTopic -eq "/coordination/final_decision" } | Select-Object -First 1)) { throw "ROS2 bridge plan missing final decision command" }
 
 Write-Step "POST /agent/execute"
 $execution = Invoke-Json POST "/agent/execute" @{ missionId = $plan.missionId }

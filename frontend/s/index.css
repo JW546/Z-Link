@@ -2783,3 +2783,613 @@ pre {
     height: 380px;
   }
 }
+/* === Virtual traffic topology readability patch === */
+/* 粘贴位置：frontend/s/index.css 最底部 */
+
+.topologyCanvas {
+  isolation: isolate;
+  position: relative;
+  min-height: 440px;
+  overflow: hidden;
+}
+
+.topologySvg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 1;
+  pointer-events: none;
+}
+
+.roadEdgeLine {
+  stroke: #70d6ffad;
+  stroke-width: 5px;
+  stroke-linecap: round;
+  filter: drop-shadow(0 0 7px rgba(112, 216, 255, 0.26));
+}
+
+.roadEdgeLine.warn {
+  stroke: #f2c66dd1;
+  stroke-width: 5.6px;
+}
+
+.roadEdgeLine.danger {
+  stroke: #ff6f78db;
+  stroke-width: 6.2px;
+}
+
+.roadNode {
+  z-index: 3;
+  width: 16px;
+  height: 16px;
+  background: rgba(8, 13, 19, 0.94);
+  border: 2px solid rgba(223, 240, 255, 0.94);
+  box-shadow:
+    0 0 0 3px rgba(112, 216, 255, 0.12),
+    0 0 16px rgba(112, 216, 255, 0.16);
+}
+
+.roadNode span {
+  z-index: 6;
+  top: 0;
+  left: 50%;
+  min-width: 106px;
+  padding: 2px 5px;
+  border-radius: 5px;
+  color: #dfeaf6;
+  background: rgba(6, 10, 16, 0.58);
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.84);
+  pointer-events: none;
+}
+
+.simDevice {
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: auto;
+  max-width: 132px;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  box-shadow: none;
+  overflow: visible;
+  transition:
+    left 0.22s ease,
+    top 0.22s ease,
+    transform 0.22s ease;
+  pointer-events: auto;
+}
+
+.simDevice .deviceIcon {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.42);
+  border-radius: 999px;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  color: var(--text);
+  background: rgba(112, 216, 255, 0.28);
+  box-shadow:
+    0 0 0 3px rgba(112, 216, 255, 0.12),
+    0 8px 18px rgba(0, 0, 0, 0.24);
+}
+
+.simDevice .deviceLabel {
+  max-width: 92px;
+  padding: 3px 6px;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 6px;
+  color: #f4f8fd;
+  background: rgba(12, 18, 27, 0.82);
+  font-size: 10px;
+  line-height: 1.15;
+  text-align: left;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.9);
+  white-space: normal;
+}
+
+.simDevice.uav .deviceIcon {
+  background: rgba(140, 241, 200, 0.3);
+  box-shadow:
+    0 0 0 3px rgba(140, 241, 200, 0.13),
+    0 8px 18px rgba(0, 0, 0, 0.24);
+}
+
+.simDevice.rsu .deviceIcon {
+  background: rgba(242, 198, 109, 0.32);
+  box-shadow:
+    0 0 0 3px rgba(242, 198, 109, 0.14),
+    0 8px 18px rgba(0, 0, 0, 0.24);
+}
+
+.simDevice.peer .deviceIcon {
+  background: rgba(187, 164, 255, 0.34);
+  box-shadow:
+    0 0 0 3px rgba(187, 164, 255, 0.14),
+    0 8px 18px rgba(0, 0, 0, 0.24);
+}
+
+.simDevice.vehicle .deviceIcon {
+  background: rgba(112, 216, 255, 0.32);
+}
+
+body[data-theme="light"] .roadNode span,
+body[data-theme="light"] .simDevice .deviceLabel {
+  color: #102640;
+  background: rgba(255, 255, 255, 0.84);
+  text-shadow: none;
+}
+
+@media (max-width: 1180px) {
+  .topologyCanvas {
+    min-height: 380px;
+  }
+}
+/* === Virtual traffic topology optimize v2 === */
+/* 粘贴位置：frontend/s/index.css 最底部，放在上一段 topology patch 后面 */
+
+.topologyCanvas {
+  min-height: 455px;
+}
+
+.roadEdgeLine.nonFinal {
+  opacity: 0.58;
+}
+
+.finalRouteLine {
+  stroke: #ffd36d;
+  stroke-width: 8px;
+  stroke-linecap: round;
+  stroke-dasharray: 10 7;
+  filter:
+    drop-shadow(0 0 9px rgba(255, 211, 109, 0.42))
+    drop-shadow(0 0 18px rgba(255, 211, 109, 0.18));
+  animation: finalRouteDash 1.1s linear infinite;
+}
+
+@keyframes finalRouteDash {
+  from { stroke-dashoffset: 0; }
+  to { stroke-dashoffset: -17; }
+}
+
+.simDevice {
+  transform: translate(-50%, -50%);
+}
+
+.simDevice.nearRight {
+  transform: translate(-100%, -50%);
+  flex-direction: row-reverse;
+}
+
+.simDevice.nearLeft {
+  transform: translate(0, -50%);
+}
+
+.simDevice.nearTop {
+  transform: translate(-50%, 0);
+}
+
+.simDevice.nearBottom {
+  transform: translate(-50%, -100%);
+}
+
+.simDevice.nearRight.nearTop {
+  transform: translate(-100%, 0);
+}
+
+.simDevice.nearRight.nearBottom {
+  transform: translate(-100%, -100%);
+}
+
+.simDevice.nearLeft.nearTop {
+  transform: translate(0, 0);
+}
+
+.simDevice.nearLeft.nearBottom {
+  transform: translate(0, -100%);
+}
+
+.simDevice.nearRight .deviceLabel {
+  text-align: right;
+}
+
+.simDevice .deviceLabel {
+  max-width: 104px;
+  word-break: break-word;
+}
+
+.routeStat.active {
+  padding: 10px;
+  border: 1px solid rgba(255, 211, 109, 0.52);
+  border-radius: 8px;
+  background: rgba(255, 211, 109, 0.08);
+}
+
+.routeStat.active strong::after {
+  content: "  ✓ final";
+  color: #ffd36d;
+  font-size: 11px;
+  letter-spacing: 0.02em;
+}
+
+body[data-theme="light"] .finalRouteLine {
+  stroke: #e69923;
+  filter: drop-shadow(0 0 7px rgba(230, 153, 35, 0.32));
+}
+/* === Final route visual correction v3 === */
+/* 让非最终路线降权，避免和最终路线混淆 */
+
+.roadEdgeLine.nonFinal {
+  opacity: 0.32;
+  stroke: rgba(112, 216, 255, 0.45);
+  stroke-width: 4.2px;
+  filter: none;
+}
+
+.roadEdgeLine.nonFinal.warn,
+.roadEdgeLine.nonFinal.danger {
+  opacity: 0.42;
+}
+
+.finalRouteLine {
+  opacity: 1;
+  stroke: #ffd36d;
+  stroke-width: 7.2px;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-dasharray: 9 7;
+  filter:
+    drop-shadow(0 0 7px rgba(255, 211, 109, 0.52))
+    drop-shadow(0 0 16px rgba(255, 211, 109, 0.22));
+}
+
+/* 避免 School zone 附近的设备和节点标签太挤 */
+.simDevice.peer {
+  margin-left: 10px;
+  margin-top: -10px;
+}
+
+.simDevice.rsu {
+  margin-left: -12px;
+  margin-top: -4px;
+}
+
+/* 最终路线卡片更醒目 */
+.routeStat.active {
+  border-color: rgba(255, 211, 109, 0.72);
+  background: linear-gradient(
+    135deg,
+    rgba(255, 211, 109, 0.14),
+    rgba(255, 211, 109, 0.045)
+  );
+}
+/* === Virtual traffic topology final patch === */
+/* 粘贴位置：frontend/s/index.css 最底部 */
+
+.topologyCanvas {
+  isolation: isolate;
+  position: relative;
+  min-height: 455px;
+  overflow: hidden;
+}
+
+.topologySvg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 1;
+  pointer-events: none;
+}
+
+.roadEdgeLine {
+  stroke: #70d6ffad;
+  stroke-width: 5px;
+  stroke-linecap: round;
+  filter: drop-shadow(0 0 7px rgba(112, 216, 255, 0.26));
+}
+
+.roadEdgeLine.warn {
+  stroke: #f2c66dd1;
+  stroke-width: 5.6px;
+}
+
+.roadEdgeLine.danger {
+  stroke: #ff6f78db;
+  stroke-width: 6.2px;
+}
+
+.roadEdgeLine.nonFinal {
+  opacity: 0.32;
+  stroke: rgba(112, 216, 255, 0.45);
+  stroke-width: 4.2px;
+  filter: none;
+}
+
+.roadEdgeLine.nonFinal.warn,
+.roadEdgeLine.nonFinal.danger {
+  opacity: 0.42;
+}
+
+.finalRouteLine {
+  opacity: 1;
+  stroke: #ffd36d;
+  stroke-width: 7.2px;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-dasharray: 9 7;
+  filter:
+    drop-shadow(0 0 7px rgba(255, 211, 109, 0.52))
+    drop-shadow(0 0 16px rgba(255, 211, 109, 0.22));
+  animation: finalRouteDash 1.1s linear infinite;
+}
+
+@keyframes finalRouteDash {
+  from { stroke-dashoffset: 0; }
+  to { stroke-dashoffset: -16; }
+}
+
+.roadNode {
+  z-index: 3;
+  width: 16px;
+  height: 16px;
+  background: rgba(8, 13, 19, 0.94);
+  border: 2px solid rgba(223, 240, 255, 0.94);
+  box-shadow:
+    0 0 0 3px rgba(112, 216, 255, 0.12),
+    0 0 16px rgba(112, 216, 255, 0.16);
+}
+
+.roadNode span {
+  z-index: 6;
+  top: 0;
+  left: 50%;
+  min-width: 82px;
+  padding: 3px 6px;
+  border-radius: 5px;
+  color: #dfeaf6;
+  background: rgba(6, 10, 16, 0.62);
+  font-size: 11px;
+  line-height: 1.15;
+  text-align: center;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.84);
+  pointer-events: none;
+}
+
+.simDevice {
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: auto;
+  max-width: 132px;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  box-shadow: none;
+  overflow: visible;
+  transform: translate(-50%, -50%);
+  transition:
+    left 0.22s ease,
+    top 0.22s ease,
+    transform 0.22s ease;
+  pointer-events: auto;
+}
+
+.simDevice.nearRight {
+  transform: translate(-100%, -50%);
+  flex-direction: row-reverse;
+}
+
+.simDevice.nearLeft {
+  transform: translate(0, -50%);
+}
+
+.simDevice.nearTop {
+  transform: translate(-50%, 0);
+}
+
+.simDevice.nearBottom {
+  transform: translate(-50%, -100%);
+}
+
+.simDevice.nearRight.nearTop {
+  transform: translate(-100%, 0);
+}
+
+.simDevice.nearRight.nearBottom {
+  transform: translate(-100%, -100%);
+}
+
+.simDevice.nearLeft.nearTop {
+  transform: translate(0, 0);
+}
+
+.simDevice.nearLeft.nearBottom {
+  transform: translate(0, -100%);
+}
+
+.simDevice .deviceIcon {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.42);
+  border-radius: 999px;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  color: var(--text);
+  background: rgba(112, 216, 255, 0.28);
+  box-shadow:
+    0 0 0 3px rgba(112, 216, 255, 0.12),
+    0 8px 18px rgba(0, 0, 0, 0.24);
+}
+
+.simDevice .deviceLabel {
+  max-width: 104px;
+  padding: 3px 6px;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 6px;
+  color: #f4f8fd;
+  background: rgba(12, 18, 27, 0.84);
+  font-size: 10px;
+  line-height: 1.15;
+  text-align: left;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.9);
+  white-space: normal;
+  word-break: break-word;
+}
+
+.simDevice.nearRight .deviceLabel {
+  text-align: right;
+}
+
+.simDevice.uav .deviceIcon {
+  background: rgba(140, 241, 200, 0.3);
+  box-shadow:
+    0 0 0 3px rgba(140, 241, 200, 0.13),
+    0 8px 18px rgba(0, 0, 0, 0.24);
+}
+
+.simDevice.rsu {
+  margin-left: -12px;
+  margin-top: -4px;
+}
+
+.simDevice.rsu .deviceIcon {
+  background: rgba(242, 198, 109, 0.32);
+  box-shadow:
+    0 0 0 3px rgba(242, 198, 109, 0.14),
+    0 8px 18px rgba(0, 0, 0, 0.24);
+}
+
+.simDevice.peer {
+  margin-left: 10px;
+  margin-top: -10px;
+}
+
+.simDevice.peer .deviceIcon {
+  background: rgba(187, 164, 255, 0.34);
+  box-shadow:
+    0 0 0 3px rgba(187, 164, 255, 0.14),
+    0 8px 18px rgba(0, 0, 0, 0.24);
+}
+
+.simDevice.vehicle .deviceIcon {
+  background: rgba(112, 216, 255, 0.32);
+}
+
+.routeStat.active {
+  padding: 10px;
+  border: 1px solid rgba(255, 211, 109, 0.72);
+  border-radius: 8px;
+  background: linear-gradient(
+    135deg,
+    rgba(255, 211, 109, 0.14),
+    rgba(255, 211, 109, 0.045)
+  );
+}
+
+.routeStat.active strong::after {
+  content: "  ✓ final";
+  color: #ffd36d;
+  font-size: 11px;
+  letter-spacing: 0.02em;
+}
+
+body[data-theme="light"] .roadNode span,
+body[data-theme="light"] .simDevice .deviceLabel {
+  color: #102640;
+  background: rgba(255, 255, 255, 0.84);
+  text-shadow: none;
+}
+
+body[data-theme="light"] .finalRouteLine {
+  stroke: #e69923;
+  filter: drop-shadow(0 0 7px rgba(230, 153, 35, 0.32));
+}
+
+@media (max-width: 1180px) {
+  .topologyCanvas {
+    min-height: 380px;
+  }
+}
+
+/* === Device coordination agent panel patch === */
+.simulationHint {
+  margin: -2px 0 8px;
+  color: var(--text-soft);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.coordinationAdviceList div {
+  padding: 8px 0 9px;
+}
+
+.coordinationAdviceList strong {
+  color: var(--accent);
+}
+
+.coordinationAdviceList small + small {
+  display: block;
+  margin-top: 3px;
+  color: var(--text-soft);
+  opacity: .86;
+}
+
+/* === Independent navigation pages === */
+.routePage {
+  align-content: start;
+}
+
+.routeFlowGrid,
+.logSummaryGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px;
+}
+
+.routeFlowGrid article,
+.routeLogList article {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--tile-bg);
+}
+
+.routeFlowGrid span,
+.routeLogList span {
+  color: var(--accent);
+  font-weight: 800;
+  font-size: 12px;
+}
+
+.routeFlowGrid small,
+.routeLogList small {
+  color: var(--text-soft);
+}
+
+.routeLogList {
+  display: grid;
+  gap: 8px;
+  max-height: 680px;
+  overflow: auto;
+}
+
+.routeLogList strong {
+  overflow-wrap: anywhere;
+}

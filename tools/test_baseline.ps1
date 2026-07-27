@@ -119,6 +119,70 @@ Write-Host "[BASELINE] Run DDS message bus test"
 & $javaExe "-Dfile.encoding=UTF-8" -cp $classpath integration.DDSMessageBusTest
 if ($LASTEXITCODE -ne 0) { throw "DDS message bus test failed." }
 
+Write-Host "[BASELINE] Compile local runtime collaboration test"
+& $javacExe -encoding UTF-8 -sourcepath (Join-Path $repoRoot "source") -cp $classpath -d $outDir (Join-Path $repoRoot "source\integration\LocalRuntimeCollaborationTest.java")
+if ($LASTEXITCODE -ne 0) { throw "Local runtime collaboration test compile failed." }
+
+Write-Host "[BASELINE] Run local runtime collaboration test"
+& $javaExe "-Dfile.encoding=UTF-8" -cp $classpath integration.LocalRuntimeCollaborationTest
+if ($LASTEXITCODE -ne 0) { throw "Local runtime collaboration test failed." }
+
+Write-Host "[BASELINE] Compile runtime coordination policy test"
+& $javacExe -encoding UTF-8 -sourcepath (Join-Path $repoRoot "source") -cp $classpath -d $outDir (Join-Path $repoRoot "source\integration\RuntimeCoordinationPolicyTest.java")
+if ($LASTEXITCODE -ne 0) { throw "Runtime coordination policy test compile failed." }
+
+Write-Host "[BASELINE] Run runtime coordination policy test"
+& $javaExe "-Dfile.encoding=UTF-8" -cp $classpath integration.RuntimeCoordinationPolicyTest
+if ($LASTEXITCODE -ne 0) { throw "Runtime coordination policy test failed." }
+
+Write-Host "[BASELINE] Compile full closed-loop scenario test"
+& $javacExe -encoding UTF-8 -sourcepath (Join-Path $repoRoot "source") -cp $classpath -d $outDir (Join-Path $repoRoot "source\integration\FullClosedLoopScenarioTest.java")
+if ($LASTEXITCODE -ne 0) { throw "Full closed-loop scenario test compile failed." }
+
+Write-Host "[BASELINE] Run full closed-loop scenario test"
+& $javaExe "-Dfile.encoding=UTF-8" -cp $classpath integration.FullClosedLoopScenarioTest
+if ($LASTEXITCODE -ne 0) { throw "Full closed-loop scenario test failed." }
+
+Write-Host "[BASELINE] Compile heterogeneous protocol adapter test"
+& $javacExe -encoding UTF-8 -sourcepath (Join-Path $repoRoot "source") -cp $classpath -d $outDir (Join-Path $repoRoot "source\integration\HeterogeneousProtocolAdapterTest.java")
+if ($LASTEXITCODE -ne 0) { throw "Heterogeneous protocol adapter test compile failed." }
+
+Write-Host "[BASELINE] Run heterogeneous protocol adapter test"
+& $javaExe "-Dfile.encoding=UTF-8" -cp $classpath integration.HeterogeneousProtocolAdapterTest
+if ($LASTEXITCODE -ne 0) { throw "Heterogeneous protocol adapter test failed." }
+
+Write-Host "[BASELINE] Compile ROS2 DDS adapter test"
+& $javacExe -encoding UTF-8 -sourcepath (Join-Path $repoRoot "source") -cp $classpath -d $outDir (Join-Path $repoRoot "source\integration\Ros2DdsAdapterTest.java")
+if ($LASTEXITCODE -ne 0) { throw "ROS2 DDS adapter test compile failed." }
+
+Write-Host "[BASELINE] Run ROS2 DDS adapter test"
+& $javaExe "-Dfile.encoding=UTF-8" -cp $classpath integration.Ros2DdsAdapterTest
+if ($LASTEXITCODE -ne 0) { throw "ROS2 DDS adapter test failed." }
+
+Write-Host "[BASELINE] Compile ROS2 live bridge test"
+& $javacExe -encoding UTF-8 -sourcepath (Join-Path $repoRoot "source") -cp $classpath -d $outDir (Join-Path $repoRoot "source\integration\Ros2LiveBridgeTest.java")
+if ($LASTEXITCODE -ne 0) { throw "ROS2 live bridge test compile failed." }
+
+Write-Host "[BASELINE] Run ROS2 live bridge test"
+& $javaExe "-Dfile.encoding=UTF-8" -cp $classpath integration.Ros2LiveBridgeTest
+if ($LASTEXITCODE -ne 0) { throw "ROS2 live bridge test failed." }
+
+Write-Host "[BASELINE] Compile ROS2 inbound bridge test"
+& $javacExe -encoding UTF-8 -sourcepath (Join-Path $repoRoot "source") -cp $classpath -d $outDir (Join-Path $repoRoot "source\integration\Ros2InboundBridgeTest.java")
+if ($LASTEXITCODE -ne 0) { throw "ROS2 inbound bridge test compile failed." }
+
+Write-Host "[BASELINE] Run ROS2 inbound bridge test"
+& $javaExe "-Dfile.encoding=UTF-8" -cp $classpath integration.Ros2InboundBridgeTest
+if ($LASTEXITCODE -ne 0) { throw "ROS2 inbound bridge test failed." }
+
+Write-Host "[BASELINE] Compile ROS2 bidirectional closed-loop test"
+& $javacExe -encoding UTF-8 -sourcepath (Join-Path $repoRoot "source") -cp $classpath -d $outDir (Join-Path $repoRoot "source\integration\Ros2BidirectionalClosedLoopTest.java")
+if ($LASTEXITCODE -ne 0) { throw "ROS2 bidirectional closed-loop test compile failed." }
+
+Write-Host "[BASELINE] Run ROS2 bidirectional closed-loop test"
+& $javaExe "-Dfile.encoding=UTF-8" -cp $classpath integration.Ros2BidirectionalClosedLoopTest
+if ($LASTEXITCODE -ne 0) { throw "ROS2 bidirectional closed-loop test failed." }
+
 Write-Host "[BASELINE] Compile virtual traffic simulation test"
 & $javacExe -encoding UTF-8 -sourcepath (Join-Path $repoRoot "source") -cp $classpath -d $outDir (Join-Path $repoRoot "source\integration\VirtualTrafficSimulationServiceTest.java")
 if ($LASTEXITCODE -ne 0) { throw "Virtual traffic simulation test compile failed." }

@@ -22,6 +22,15 @@ import java.util.Map;
 public class CollaborationDecisionEngine {
     private final RouteFeatureExtractor routeSelector = new RouteFeatureExtractor();
     private final ConflictResolver conflictResolver = new ConflictResolver();
+    private final RouteDecisionAssistant routeDecisionAssistant;
+
+    public CollaborationDecisionEngine() {
+        this(new QwenRouteDecisionAssistant());
+    }
+
+    public CollaborationDecisionEngine(RouteDecisionAssistant routeDecisionAssistant) {
+        this.routeDecisionAssistant = routeDecisionAssistant;
+    }
 
     public Map<String, Object> evaluate(String passengerUtterance, String missionId) {
         String text = passengerUtterance == null ? "" : passengerUtterance;
@@ -49,7 +58,7 @@ public class CollaborationDecisionEngine {
         List<AgentAdvice> adviceObjects = toAdvice(deviceAdvice);
         Map<String, Object> resolution = conflictResolver.resolve(adviceObjects, urgent, safetyFirst);
         RouteSelectionResult egoSelection = routeSelector.select(candidates, RouteScoringContext.fromState(baseState, AgentRole.EGO_VEHICLE));
-        Map<String, Object> finalDecision = finalDecision(destination, resolution, egoSelection);
+        Map<String, Object> finalDecision = finalDecision(text, destination, resolution, egoSelection, deviceAdvice);
 
         Map<String, Object> result = new LinkedHashMap<String, Object>();
         result.put("autonomyMode", "vehicle_self_decision");
@@ -180,8 +189,9 @@ public class CollaborationDecisionEngine {
         return advice;
     }
 
-    private Map<String, Object> finalDecision(String destination, Map<String, Object> resolution,
-                                              RouteSelectionResult egoSelection) {
+    private Map<String, Object> finalDecision(String passengerIntent, String destination, Map<String, Object> resolution,
+                                              RouteSelectionResult egoSelection,
+                                              List<Map<String, Object>> deviceAdvice) {
         String resolvedRoute = String.valueOf(resolution.getOrDefault("finalRoute", ""));
         String route = resolvedRoute.isBlank() ? egoSelection.routeId() : resolvedRoute;
         Map<String, Object> decision = new LinkedHashMap<String, Object>();
@@ -197,7 +207,37 @@ public class CollaborationDecisionEngine {
         decision.put("nextAction", "publish urban/route/final_decision.dsl and continue DDS advice subscription");
         decision.put("routeSelection", egoSelection.toMap());
         decision.put("conflictResolution", resolution);
+        applyRouteDecisionSupport(decision, passengerIntent, destination, route, deviceAdvice, resolution, egoSelection);
         return decision;
+    }
+
+    private void applyRouteDecisionSupport(Map<String, Object> decision, String passengerIntent, String destination,
+                                           String route, List<Map<String, Object>> deviceAdvice,
+                                           Map<String, Object> resolution, RouteSelectionResult egoSelection) {
+        String ruleReason = String.valueOf(decision.getOrDefault("reason", ""));
+        decision.put("decisionAuthority", "vehicle_agent_rule_score_safety_constraint");
+        decision.put("llmRole", "explanation_intent_completion_auxiliary_analysis_only");
+        decision.put("ruleBasedReason", ruleReason);
+
+        RouteDecisionAssistant.RouteDecisionSupport support = routeDecisionAssistant == null
+            ? RouteDecisionAssistant.RouteDecisionSupport.unavailable("No route decision assistant configured.")
+            : routeDecisionAssistant.analyze(new RouteDecisionAssistant.RouteDecisionRequest(
+                passengerIntent,
+                destination,
+                route,
+                ruleReason,
+                deviceAdvice,
+                resolution,
+                egoSelection == null ? null : egoSelection.toMap()
+            ));
+
+        decision.put("llmAssisted", support.available);
+        decision.put("llmProvider", support.provider);
+        decision.put("llmModel", support.model);
+        decision.put("llmConfidence", round(support.confidence));
+        decision.put("llmLatencyMs", support.latencyMs);
+        decision.put("llmAnalysis", support.summary);
+        decision.put("passengerExplanation", support.available ? support.passengerExplanation : ruleReason);
     }
 
     private Map<String, Object> routePlan(RouteSelectionResult selection) {

@@ -26,6 +26,7 @@ public class VirtualDDSMessageBus {
     public static final String TOPIC_NEIGHBOR_STATUS = "neighbor/vehicle/status";
     public static final String TOPIC_FINAL_DECISION = "coordination/final/decision";
     public static final String TOPIC_REPLANNING_REQUEST = "coordination/replanning/request";
+    public static final String TOPIC_DEVICE_COORDINATION_ADVICE = "coordination/device/advice";
 
     private final Map<String, DDSTopic> topics = new ConcurrentHashMap<String, DDSTopic>();
     private final Map<String, List<Consumer<DDSMessage>>> subscribers =
@@ -87,9 +88,13 @@ public class VirtualDDSMessageBus {
     }
 
     public DDSMessage publish(String topic, String sourceId, Map<String, Object> payload, DDSQoS qos) {
+        return publishTo(topic, sourceId, "ALL", payload, qos);
+    }
+
+    public DDSMessage publishTo(String topic, String sourceId, String targetId, Map<String, Object> payload, DDSQoS qos) {
         DDSTopic registered = ensureTopic(topic);
         DDSQoS effectiveQos = qos == null ? registered.qos : qos;
-        DDSMessage message = new DDSMessage(topic, sourceId, "ALL", payload, effectiveQos);
+        DDSMessage message = new DDSMessage(topic, sourceId, targetId, payload, effectiveQos);
         history.add(message);
 
         if (shouldDrop(effectiveQos)) {
@@ -130,6 +135,7 @@ public class VirtualDDSMessageBus {
         registerTopic(TOPIC_NEIGHBOR_STATUS, "NeighborVehicleStatus", DDSQoS.bestEffort());
         registerTopic(TOPIC_FINAL_DECISION, "FinalCoordinationDecision", DDSQoS.reliable());
         registerTopic(TOPIC_REPLANNING_REQUEST, "ReplanningRequest", DDSQoS.reliable());
+        registerTopic(TOPIC_DEVICE_COORDINATION_ADVICE, "DeviceCoordinationAdvice", DDSQoS.reliable());
     }
 
     private DDSTopic ensureTopic(String topicName) {

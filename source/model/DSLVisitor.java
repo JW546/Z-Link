@@ -59,6 +59,12 @@ public class DSLVisitor extends TailorBaseVisitor<Object> {
                 result = visitPathPlanning((TailorParser.PathPlanningContext) child);
             } else if (child instanceof TailorParser.TransportationStateContext) {
                 result = visitTransportationState((TailorParser.TransportationStateContext) child);
+            } else if (child instanceof TailorParser.DataExchangeContractContext) {
+                result = visitDataExchangeContract((TailorParser.DataExchangeContractContext) child);
+            } else if (child instanceof TailorParser.CommandExchangeContractContext) {
+                result = visitCommandExchangeContract((TailorParser.CommandExchangeContractContext) child);
+            } else if (child instanceof TailorParser.DdsIdlBindingContext) {
+                result = visitDdsIdlBinding((TailorParser.DdsIdlBindingContext) child);
             } else {
                 result = visit(child);
             }
@@ -225,6 +231,73 @@ public class DSLVisitor extends TailorBaseVisitor<Object> {
     }
 
     @Override
+    public Object visitDataExchangeContract(TailorParser.DataExchangeContractContext ctx) {
+        currentState = new State("dataExchangeContract");
+        currentMission.addState(currentState);
+        generatedJavaCode.append("\n    public State dataExchangeContract;\n");
+
+        addContractField("contract_kind", "data_exchange");
+        for (TailorParser.DataFlowDeclarationContext flowCtx : ctx.dataFlowDeclaration()) {
+            String name = flowCtx.IDENTIFIER(0).getText();
+            addContractField(name + ".from", readEndpoint(flowCtx.endpoint(0)));
+            addContractField(name + ".to", readEndpoint(flowCtx.endpoint(1)));
+            addContractField(name + ".topic", removeQuotes(flowCtx.STRING(0).getText()));
+            addContractField(name + ".idl", flowCtx.qualifiedName().getText());
+            addContractField(name + ".fields", readFieldList(flowCtx.fieldList()));
+            addContractField(name + ".qos", flowCtx.IDENTIFIER(1).getText());
+            addContractField(name + ".purpose", removeQuotes(flowCtx.STRING(1).getText()));
+        }
+        appendStateConstructor("dataExchangeContract", currentState);
+        currentState = null;
+        return null;
+    }
+
+    @Override
+    public Object visitCommandExchangeContract(TailorParser.CommandExchangeContractContext ctx) {
+        currentState = new State("commandExchangeContract");
+        currentMission.addState(currentState);
+        generatedJavaCode.append("\n    public State commandExchangeContract;\n");
+
+        addContractField("contract_kind", "command_exchange");
+        for (TailorParser.CommandFlowDeclarationContext commandCtx : ctx.commandFlowDeclaration()) {
+            String name = commandCtx.IDENTIFIER(0).getText();
+            addContractField(name + ".from", readEndpoint(commandCtx.endpoint(0)));
+            addContractField(name + ".to", readEndpoint(commandCtx.endpoint(1)));
+            addContractField(name + ".topic", removeQuotes(commandCtx.STRING(0).getText()));
+            addContractField(name + ".idl", commandCtx.qualifiedName().getText());
+            addContractField(name + ".kind", commandCtx.IDENTIFIER(1).getText());
+            addContractField(name + ".fields", readFieldList(commandCtx.fieldList()));
+            addContractField(name + ".qos", commandCtx.IDENTIFIER(2).getText());
+            addContractField(name + ".effect", removeQuotes(commandCtx.STRING(1).getText()));
+        }
+        for (TailorParser.SafetyRuleDeclarationContext ruleCtx : ctx.safetyRuleDeclaration()) {
+            addContractField("safety." + ruleCtx.IDENTIFIER().getText(), removeQuotes(ruleCtx.STRING().getText()));
+        }
+        appendStateConstructor("commandExchangeContract", currentState);
+        currentState = null;
+        return null;
+    }
+
+    @Override
+    public Object visitDdsIdlBinding(TailorParser.DdsIdlBindingContext ctx) {
+        currentState = new State("ddsIdlBinding");
+        currentMission.addState(currentState);
+        generatedJavaCode.append("\n    public State ddsIdlBinding;\n");
+
+        addContractField("contract_kind", "dds_idl_binding");
+        for (TailorParser.DdsBindingDeclarationContext bindingCtx : ctx.ddsBindingDeclaration()) {
+            String name = bindingCtx.IDENTIFIER(0).getText();
+            addContractField(name + ".topic", removeQuotes(bindingCtx.STRING(0).getText()));
+            addContractField(name + ".idl_type", bindingCtx.qualifiedName().getText());
+            addContractField(name + ".idl_file", removeQuotes(bindingCtx.STRING(1).getText()));
+            addContractField(name + ".qos", bindingCtx.IDENTIFIER(1).getText());
+        }
+        appendStateConstructor("ddsIdlBinding", currentState);
+        currentState = null;
+        return null;
+    }
+
+    @Override
     public Object visitFieldDeclaration(TailorParser.FieldDeclarationContext ctx) {
         String fieldName = ctx.fieldName != null ? ctx.fieldName.getText() : null;
         TailorParser.FieldValueContext fvCtx = ctx.fieldValue();
@@ -293,6 +366,42 @@ public class DSLVisitor extends TailorBaseVisitor<Object> {
         }
 
         return fvCtx.getText();
+    }
+
+    private void appendStateConstructor(String stateName, State state) {
+        constructorStatements.add(stateName + " = new State(\"" + stateName + "\");");
+        for (Map.Entry<String, String> entry : state.getFields().entrySet()) {
+            String value = entry.getValue();
+            if (value != null) {
+                value = value.replace("\\", "\\\\").replace("\"", "\\\"");
+            }
+            constructorStatements.add(stateName + ".addRawField(\"" + entry.getKey() + "\", \"" + value + "\");");
+        }
+    }
+
+    private void addContractField(String key, String value) {
+        currentState.addRawField(key, value);
+    }
+
+    private String readEndpoint(TailorParser.EndpointContext ctx) {
+        if (ctx == null) {
+            return "";
+        }
+        if (ctx.STRING() != null) {
+            return removeQuotes(ctx.STRING().getText());
+        }
+        return ctx.IDENTIFIER().getText();
+    }
+
+    private String readFieldList(TailorParser.FieldListContext ctx) {
+        if (ctx == null) {
+            return "";
+        }
+        List<String> names = new ArrayList<>();
+        for (TerminalNode node : ctx.IDENTIFIER()) {
+            names.add(node.getText());
+        }
+        return String.join(",", names);
     }
 
     private String readValue(TailorParser.LiteralValueContext literalCtx,

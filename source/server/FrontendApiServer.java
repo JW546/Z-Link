@@ -38,6 +38,11 @@ import evaluation.BaselineComparison;
 import nlu.NLToDSLToJavaPipeline;
 import policy.PolicyEvaluator;
 import policy.PolicyOptimizationService;
+import policy.RouteTrainingService;
+import collaboration.ros2.Ros2DdsAdapter;
+import collaboration.runtime.LocalDDSBroker;
+import collaboration.runtime.LocalRuntimeScenario;
+import collaboration.runtime.RuntimeScenarioResult;
 import simulation.SimulationScenarioService;
 import simulation.SimulationTickResult;
 import simulation.VirtualTrafficSimulationService;
@@ -62,6 +67,7 @@ public class FrontendApiServer {
     private static final BaselineComparison BASELINE_COMPARISON = new BaselineComparison();
     private static final PolicyEvaluator POLICY_EVALUATOR = new PolicyEvaluator();
     private static final PolicyOptimizationService POLICY_OPTIMIZER = new PolicyOptimizationService();
+    private static final RouteTrainingService ROUTE_TRAINING = new RouteTrainingService();
 
     static {
         MISSIONS.add(mission("MSN-VDDS-001", "乘客希望尽快到达西南大学附属医院，前方拥堵时由车辆自主询问邻车、无人机和 RSU", "running", "乘客意图驱动路线协同"));
@@ -108,6 +114,11 @@ public class FrontendApiServer {
         server.createContext("/api/simulation/stop", withCors(FrontendApiServer::simulationStop));
         server.createContext("/api/simulation/state", withCors(FrontendApiServer::simulationState));
         server.createContext("/api/simulation/dds-events", withCors(FrontendApiServer::simulationDdsEvents));
+        server.createContext("/api/runtime/profile", withCors(FrontendApiServer::runtimeProfile));
+        server.createContext("/api/runtime/topics", withCors(FrontendApiServer::runtimeTopics));
+        server.createContext("/api/runtime/run", withCors(FrontendApiServer::runtimeRun));
+        server.createContext("/api/runtime/ros2/profile", withCors(FrontendApiServer::runtimeRos2Profile));
+        server.createContext("/api/runtime/ros2/bridge-plan", withCors(FrontendApiServer::runtimeRos2BridgePlan));
         server.createContext("/api/mission/action", withCors(FrontendApiServer::missionAction));
         server.createContext("/api/device/action", withCors(FrontendApiServer::deviceAction));
         server.createContext("/api/topic/action", withCors(FrontendApiServer::topicAction));
@@ -217,6 +228,10 @@ public class FrontendApiServer {
         } else if ("agent.qwenHealth".equals(capabilityId)) {
             response.put("mode", "real");
             response.put("data", qwenHealth());
+        } else if ("policy.rlTraining".equals(capabilityId)) {
+            int episodes = body.has("episodes") ? body.get("episodes").getAsInt() : 120;
+            response.put("mode", "simulation-training");
+            response.put("data", ROUTE_TRAINING.runExperiment(episodes));
         } else if ("map.route".equals(capabilityId)) {
             response.put("mode", "real-with-fallback");
             response.put("data", mapOverlay(input));
@@ -686,6 +701,116 @@ public class FrontendApiServer {
         sendJson(exchange, 200, response);
     }
 
+    private static void runtimeProfile(HttpExchange exchange) throws IOException {
+        requireMethod(exchange, "GET");
+        Map<String, Object> response = new LinkedHashMap<String, Object>();
+        response.put("ok", true);
+        response.put("runtimeMode", "local_tcp_dds_compatible");
+        response.put("coreSystemWithoutFrontend", true);
+        response.put("defaultStatusIntervalMs", 500);
+        response.put("defaultStatusRateHz", 2.0);
+        response.put("supportedIntervalsMs", Arrays.asList(1000, 500, 200));
+        response.put("communicationPattern", Arrays.asList("initial_intent_contract", "periodic_status_sync", "event_triggered_conflict_and_replan"));
+        response.put("agents", Arrays.asList(
+            runtimeAgent("UAV-CQ-007", "UAV", "DJI-STYLE", "runtime/agent/status", "runtime/protocol/native_frame"),
+            runtimeAgent("CAR-CQ-001", "EGO_CAR", "ROS2-DDS", "runtime/agent/status", "runtime/protocol/native_frame"),
+            runtimeAgent("PEER-CAR-031", "PEER_CAR", "GENERIC-PRIVATE-JSON", "runtime/agent/status", "runtime/protocol/native_frame"),
+            runtimeAgent("COORDINATOR-CQ-001", "COORDINATOR", "DDS-COMPATIBLE", "runtime/conflict/event,runtime/replanning/request,runtime/decision/final", "runtime/policy/evaluation")
+        ));
+        response.put("ros2Boundary", "Local TCP broker can be replaced by a ROS 2/DDS Adapter without moving decision logic into the frontend.");
+        sendJson(exchange, 200, response);
+    }
+
+    private static void runtimeTopics(HttpExchange exchange) throws IOException {
+        requireMethod(exchange, "GET");
+        Map<String, Object> response = new LinkedHashMap<String, Object>();
+        response.put("ok", true);
+        response.put("idlFile", "idl/urban_intent_collaboration.idl");
+        response.put("topics", Arrays.asList(
+            runtimeTopic(LocalDDSBroker.TOPIC_INTENT_CONTRACT, "urban.RuntimeIntentContract", "RELIABLE_KEEP_LAST", "initial task contract"),
+            runtimeTopic(LocalDDSBroker.TOPIC_AGENT_STATUS, "urban.RuntimeAgentStatus", "BEST_EFFORT_SENSOR_STREAM", "periodic status sync"),
+            runtimeTopic(LocalDDSBroker.TOPIC_PROTOCOL_FRAME, "urban.ProtocolNativeFrame", "RELIABLE_KEEP_LAST", "adapter output for heterogeneous protocols"),
+            runtimeTopic(LocalDDSBroker.TOPIC_CONFLICT_EVENT, "urban.ConflictEvent", "RELIABLE_LOW_LATENCY", "event triggered conflict detection"),
+            runtimeTopic(LocalDDSBroker.TOPIC_REPLAN_REQUEST, "urban.ReplanningRequest", "RELIABLE_LOW_LATENCY", "dynamic replanning request"),
+            runtimeTopic(LocalDDSBroker.TOPIC_FINAL_DECISION, "urban.RouteDecision", "RELIABLE_TRANSIENT_LOCAL", "explainable final decision"),
+            runtimeTopic(LocalDDSBroker.TOPIC_POLICY_EVALUATION, "urban.PolicyEvaluationReport", "RELIABLE_KEEP_LAST", "baseline and cooperative policy comparison")
+        ));
+        sendJson(exchange, 200, response);
+    }
+
+    private static void runtimeRun(HttpExchange exchange) throws IOException {
+        requireMethod(exchange, "POST");
+        JsonObject body = requestJson(exchange);
+        long intervalMs = body.has("intervalMs") ? body.get("intervalMs").getAsLong() : 500L;
+        int ticks = body.has("ticks") ? body.get("ticks").getAsInt() : 6;
+        if (intervalMs < 50L || intervalMs > 5_000L) {
+            throw new IllegalArgumentException("intervalMs must be between 50 and 5000");
+        }
+        if (ticks < 1 || ticks > 40) {
+            throw new IllegalArgumentException("ticks must be between 1 and 40 for API runtime runs");
+        }
+
+        RuntimeScenarioResult result;
+        try {
+            result = new LocalRuntimeScenario().run(intervalMs, ticks);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IOException("runtime run interrupted", e);
+        }
+
+        Map<String, Object> response = new LinkedHashMap<String, Object>();
+        response.put("ok", true);
+        response.put("runtimeMode", "local_tcp_dds_compatible");
+        response.put("intervalMs", intervalMs);
+        response.put("rateHz", 1000.0 / intervalMs);
+        response.put("ticks", ticks);
+        response.put("messageCount", result.history.size());
+        response.put("history", result.history);
+        response.put("agentStatuses", filterTopic(result, LocalDDSBroker.TOPIC_AGENT_STATUS));
+        response.put("nativeProtocolFrames", filterTopic(result, LocalDDSBroker.TOPIC_PROTOCOL_FRAME));
+        response.put("conflictEvents", filterTopic(result, LocalDDSBroker.TOPIC_CONFLICT_EVENT));
+        response.put("replanningRequests", filterTopic(result, LocalDDSBroker.TOPIC_REPLAN_REQUEST));
+        response.put("policyEvaluations", filterTopic(result, LocalDDSBroker.TOPIC_POLICY_EVALUATION));
+        response.put("finalDecision", result.finalDecision == null ? new LinkedHashMap<String, Object>() : result.finalDecision.toMap());
+        response.put("runtimeBoundary", "Core Agent communication runs in backend socket processes; frontend is observer only.");
+        sendJson(exchange, 200, response);
+    }
+
+    private static void runtimeRos2Profile(HttpExchange exchange) throws IOException {
+        requireMethod(exchange, "GET");
+        Ros2DdsAdapter adapter = new Ros2DdsAdapter();
+        Map<String, Object> response = new LinkedHashMap<String, Object>();
+        response.put("ok", true);
+        response.put("ros2Available", adapter.isAvailable());
+        response.put("ros2Executable", adapter.executable());
+        response.put("fallbackMode", "local_tcp_dds_compatible_runtime");
+        response.put("messageEncoding", "std_msgs/msg/String for quick interop; urban_runtime_msgs custom messages are available for structured ROS2 I/O");
+        response.put("topicBindings", adapter.planBridge(null).topicBindings);
+        response.put("installState", adapter.isAvailable() ? "ROS2 CLI detected" : "ROS2 CLI not detected; adapter remains in dry-run mode");
+        sendJson(exchange, 200, response);
+    }
+
+    private static void runtimeRos2BridgePlan(HttpExchange exchange) throws IOException {
+        requireMethod(exchange, "POST");
+        JsonObject body = requestJson(exchange);
+        long intervalMs = body.has("intervalMs") ? body.get("intervalMs").getAsLong() : 500L;
+        int ticks = body.has("ticks") ? body.get("ticks").getAsInt() : 4;
+        RuntimeScenarioResult result;
+        try {
+            result = new LocalRuntimeScenario().run(intervalMs, ticks);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IOException("runtime ROS2 bridge plan interrupted", e);
+        }
+        Ros2DdsAdapter adapter = new Ros2DdsAdapter();
+        Map<String, Object> response = adapter.planBridge(result.history).toMap();
+        response.put("ok", true);
+        response.put("sourceRuntimeMessageCount", result.history.size());
+        response.put("finalDecision", result.finalDecision == null ? new LinkedHashMap<String, Object>() : result.finalDecision.toMap());
+        response.put("note", "Commands are dry-run unless ros2 CLI is detected; custom ROS2 interfaces are supported when ROS2_MESSAGE_MODE=custom.");
+        sendJson(exchange, 200, response);
+    }
+
     private static void executeMission(HttpExchange exchange) throws IOException {
         requireMethod(exchange, "POST");
         JsonObject body = requestJson(exchange);
@@ -751,6 +876,36 @@ public class FrontendApiServer {
         sendJson(exchange, 200, DEVICE_REGISTRY.listDevices());
     }
 
+    private static Map<String, Object> runtimeAgent(String id, String role, String protocol, String subscribes, String publishes) {
+        Map<String, Object> agent = new LinkedHashMap<String, Object>();
+        agent.put("id", id);
+        agent.put("role", role);
+        agent.put("protocolAdapter", protocol);
+        agent.put("subscribes", Arrays.asList(subscribes.split(",")));
+        agent.put("publishes", Arrays.asList(publishes.split(",")));
+        return agent;
+    }
+
+    private static Map<String, Object> runtimeTopic(String topic, String idlType, String qos, String purpose) {
+        Map<String, Object> item = new LinkedHashMap<String, Object>();
+        item.put("topic", topic);
+        item.put("idlType", idlType);
+        item.put("qos", qos);
+        item.put("purpose", purpose);
+        item.put("transport", "local_tcp_now_ros2_dds_adapter_later");
+        return item;
+    }
+
+    private static List<Map<String, Object>> filterTopic(RuntimeScenarioResult result, String topic) {
+        List<Map<String, Object>> filtered = new ArrayList<Map<String, Object>>();
+        for (Map<String, Object> item : result.history) {
+            if (topic.equals(item.get("topic"))) {
+                filtered.add(item);
+            }
+        }
+        return filtered;
+    }
+
     private static List<Map<String, Object>> backendCapabilityGroups() {
         List<Map<String, Object>> groups = new ArrayList<Map<String, Object>>();
         groups.add(capabilityGroup("NLU / DSL / Java", Arrays.asList(
@@ -762,7 +917,8 @@ public class FrontendApiServer {
             capability("agent.cps", "CPS Agent 决策", "agent.CPSAgent.processInput", "/api/agent/plan", "real+simulated", "已接入", "前端工作台的意图、步骤、设备、发布订阅策略由此类能力组合生成。", "run", "explain"),
             capability("agent.qwenHealth", "千问兼容 API 健康检查", "agent.DeepSeekClient.healthCheck", "/api/health, /api/capability/action", "real", "已接入", "读取 QWEN/DashScope 配置并可发起兼容模式健康检查。", "health", "config"),
             capability("agent.pubsubDecision", "发布订阅决策器", "agent.PubSubDecisionMaker.makeDecision", "/api/capability/action", "simulated", "已暴露", "根据角色、任务阶段和意图选择 DDS 发布/订阅主题。", "decide", "rules"),
-            capability("agent.dataMatching", "协同数据匹配", "agent.DataMatchingEngine.matchProviderConsumer", "/api/capability/action", "simulated", "已暴露", "匹配无人机、无人车、邻车和合规广域中继之间可提供和需要的数据。", "match", "inspect")
+            capability("agent.dataMatching", "协同数据匹配", "agent.DataMatchingEngine.matchProviderConsumer", "/api/capability/action", "simulated", "已暴露", "匹配无人机、无人车、邻车和合规广域中继之间可提供和需要的数据。", "match", "inspect"),
+            capability("policy.rlTraining", "路线策略 Q-learning 训练原型", "policy.RouteTrainingService.runExperiment", "/api/capability/action", "simulation-training", "已接入", "在虚拟 DDS 多源证据环境中训练小规模表格 Q-learning 策略，并和随机/规则 baseline 对比；不声称 DQN/PPO 或真实车端训练。", "train", "compare")
         )));
         groups.add(capabilityGroup("DDS / IDL", Arrays.asList(
             capability("dds.topicCatalog", "DDS/IDL 主题目录", "dds.DDSManager + generated IDL TypeSupport", "/api/agent/plan, /api/capability/action", "real-schema", "已接入", "严格返回 DDS Topic、IDL module/type、TypeSupport、QoS、Key。", "list", "publish"),
@@ -959,6 +1115,17 @@ public class FrontendApiServer {
 
     private static boolean isValidLogin(String username, String password) {
         String normalized = username == null ? "" : username.trim();
+        String configuredUsers = System.getenv("PLATFORM_USERS");
+        if (configuredUsers != null && !configuredUsers.isBlank()) {
+            for (String pair : configuredUsers.split(",")) {
+                String[] parts = pair.split(":", 2);
+                if (parts.length == 2 && normalized.equalsIgnoreCase(parts[0].trim())
+                    && String.valueOf(password).equals(parts[1].trim())) {
+                    return true;
+                }
+            }
+            return false;
+        }
         if ("admin".equalsIgnoreCase(normalized) && "admin123".equals(password)) {
             return true;
         }

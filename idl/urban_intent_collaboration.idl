@@ -130,4 +130,67 @@ module urban {
     double final_risk_score;
     double confidence;
   };
+
+  struct RuntimeIntentContract {
+    Header header;
+    IdString mission_id;
+    TextString natural_language;
+    ContractString dsl_contract;
+    sequence<IdString, 16> required_agents;
+    unsigned long default_status_interval_ms;
+  };
+
+  struct RuntimeAgentStatus {
+    Header header;
+    IdString agent_id;
+    IdString role;            // UAV, EGO_CAR, PEER_CAR
+    IdString protocol;        // DJI-STYLE, ROS2-DDS, GENERIC-PRIVATE-JSON
+    IdString route;
+    double position_x_m;
+    double position_y_m;
+    double position_z_m;
+    double speed_mps;
+    double battery_pct;
+    double publish_rate_hz;
+    IdString mission_status;
+  };
+
+  struct ProtocolNativeFrame {
+    Header header;
+    IdString agent_id;
+    IdString role;
+    IdString protocol;
+    IdString unified_topic;
+    ContractString native_payload_json;
+    TextString compatibility_note;
+  };
+
+  struct ConflictEvent {
+    Header header;
+    IdString conflict_id;
+    IdString conflict_type;
+    sequence<IdString, 16> involved_agents;
+    IdString route;
+    double severity;
+    TextString explanation;
+  };
+
+  struct ReplanningRequest {
+    Header header;
+    IdString mission_id;
+    TextString reason;
+    TextString request;
+    IdString requested_by;
+  };
+
+  struct PolicyEvaluationReport {
+    Header header;
+    IdString mission_id;
+    IdString winner;
+    double dijkstra_risk;
+    double greedy_risk;
+    double cooperative_risk;
+    unsigned long conflict_count;
+    TextString explanation;
+  };
 };

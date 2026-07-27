@@ -409,43 +409,107 @@ public class DSLGenerator {
     }
 
     private String generateDataExchangeContract(NLUResult result, Intent intent) {
-        StringBuilder state = new StringBuilder();
-        state.append("\n    state dataExchangeContract {\n");
-        state.append("        string purpose = \"define_vehicle_to_vehicle_and_infrastructure_data\";\n");
-        state.append("        string data_1 = \"topic=urban/vehicle/telemetry.dsl; idl=urban.VehicleTelemetry; publisher=CAR-CQ-001|CAR-CQ-002; subscriber=UAV-CQ-007; fields=vehicle_id,position_x_m,position_y_m,speed_mps,heading_deg,road_event,traffic_signal; qos=BEST_EFFORT_sensor_stream; purpose=share_vehicle_motion_and_road_state\";\n");
-        state.append("        string data_2 = \"topic=urban/uav/aerial_perception.dsl; idl=urban.EnvironmentPerception; publisher=UAV-CQ-007; subscriber=CAR-CQ-001|CAR-CQ-002; fields=event_type,confidence,risk_score,visibility_m,wind_speed_mps,evidence_summary; qos=BEST_EFFORT_sensor_stream; purpose=share_forward_corridor_perception\";\n");
-        state.append("        string data_3 = \"topic=urban/rsu/road_event.dsl; idl=urban.RsuRoadEvent; publisher=RSU-SCHOOL-009; subscriber=CAR-CQ-001|CAR-CQ-002; fields=road_event,traffic_signal,pedestrian_count,rsu_load,recommended_route,risk_score; qos=RELIABLE_keep_last_10; purpose=share_roadside_event\";\n");
-        state.append("        string data_4 = \"topic=backbone/compliant/context.dsl; idl=urban.CompliantNetworkContext; publisher=CN-BACKBONE-CQ; subscriber=CAR-CQ-001|CAR-CQ-002; fields=link_mode,link_health,private_5g_signal,rsu_load,expected_latency_ms,recommended_route; qos=RELIABLE_keep_last_10; purpose=context_only_no_remote_dispatch\";\n");
-        state.append("    }\n");
-        return state.toString();
+        StringBuilder contract = new StringBuilder();
+        contract.append("\n    dataExchangeContract {\n");
+        appendDataFlow(contract, "vehicleTelemetry", "CAR-CQ-001|CAR-CQ-002", "UAV-CQ-007",
+            "urban/vehicle/telemetry.dsl", "urban.VehicleTelemetry",
+            "BEST_EFFORT_SENSOR_STREAM", "share_vehicle_motion_and_road_state",
+            "vehicle_id", "position_x_m", "position_y_m", "speed_mps", "heading_deg", "road_event", "traffic_signal");
+        appendDataFlow(contract, "uavForwardPerception", "UAV-CQ-007", "CAR-CQ-001|CAR-CQ-002",
+            "urban/uav/aerial_perception.dsl", "urban.EnvironmentPerception",
+            "BEST_EFFORT_SENSOR_STREAM", "share_forward_corridor_perception",
+            "event_type", "confidence", "risk_score", "visibility_m", "wind_speed_mps", "evidence_summary");
+        appendDataFlow(contract, "rsuRoadEvent", "RSU-SCHOOL-009", "CAR-CQ-001|CAR-CQ-002",
+            "urban/rsu/road_event.dsl", "urban.RsuRoadEvent",
+            "RELIABLE_KEEP_LAST_10", "share_roadside_event",
+            "road_event", "traffic_signal", "pedestrian_count", "rsu_load", "recommended_route", "risk_score");
+        appendDataFlow(contract, "compliantBackboneContext", "CN-BACKBONE-CQ", "CAR-CQ-001|CAR-CQ-002",
+            "backbone/compliant/context.dsl", "urban.CompliantNetworkContext",
+            "RELIABLE_KEEP_LAST_10", "context_only_no_remote_dispatch",
+            "link_mode", "link_health", "private_5g_signal", "rsu_load", "expected_latency_ms", "recommended_route");
+        contract.append("    }\n");
+        return contract.toString();
     }
 
     private String generateCommandExchangeContract(NLUResult result, Intent intent) {
-        StringBuilder state = new StringBuilder();
-        state.append("\n    state commandExchangeContract {\n");
-        state.append("        string purpose = \"define_intent_advice_and_final_decision_commands\";\n");
-        state.append("        string command_1 = \"topic=cabin/passenger/intent.dsl; idl=urban.MissionCommand; publisher=CABIN-CAR-CQ-001; subscriber=CAR-CQ-001|CAR-CQ-002|UAV-CQ-007|RSU-SCHOOL-009; kind=PASSENGER_INTENT; fields=natural_language,destination,urgency,preference,requested_capabilities,publish_topics,subscribe_topics; qos=RELIABLE_keep_last_10; effect=trigger_device_self_subscription\";\n");
-        state.append("        string command_2 = \"topic=urban/vehicle/peer_advice.dsl; idl=urban.RouteAdvice; publisher=CAR-CQ-002; subscriber=CAR-CQ-001; kind=PEER_ADVICE; fields=source_type,destination,route_candidate,risk_score,confidence,estimated_time_min,advice_reason; qos=RELIABLE_keep_last_10; effect=provide_peer_route_suggestion\";\n");
-        state.append("        string command_3 = \"topic=urban/route/advice.dsl; idl=urban.RouteAdvice; publisher=CAR-CQ-001|CAR-CQ-002|UAV-CQ-007; subscriber=CABIN-CAR-CQ-001|CAR-CQ-001|CN-BACKBONE-CQ; kind=ROUTE_ADVICE; fields=route_candidate,risk_score,confidence,advice_reason,required_topics; qos=RELIABLE_keep_last_10; effect=feed_route_fusion\";\n");
-        state.append("        string command_4 = \"topic=urban/route/final_decision.dsl; idl=urban.RouteDecision; publisher=CAR-CQ-001; subscriber=CABIN-CAR-CQ-001; kind=FINAL_ROUTE_DECISION; fields=decision_owner,autonomy_mode,final_route,final_risk_score,confidence,advice_sources,passenger_explanation,fusion_reason; qos=RELIABLE_keep_last_10; effect=explain_vehicle_self_decision_to_passenger\";\n");
-        state.append("        string safety_rule = \"wide_area_backbone_may_publish_context_but_must_not_publish_dispatch_command\";\n");
-        state.append("    }\n");
-        return state.toString();
+        StringBuilder contract = new StringBuilder();
+        contract.append("\n    commandExchangeContract {\n");
+        appendCommandFlow(contract, "passengerIntent", "CABIN-CAR-CQ-001", "CAR-CQ-001|CAR-CQ-002|UAV-CQ-007|RSU-SCHOOL-009",
+            "cabin/passenger/intent.dsl", "urban.MissionCommand", "PASSENGER_INTENT",
+            "RELIABLE_KEEP_LAST_10", "trigger_device_self_subscription",
+            "natural_language", "destination", "urgency", "preference", "requested_capabilities", "publish_topics", "subscribe_topics");
+        appendCommandFlow(contract, "peerAdvice", "CAR-CQ-002", "CAR-CQ-001",
+            "urban/vehicle/peer_advice.dsl", "urban.RouteAdvice", "PEER_ADVICE",
+            "RELIABLE_KEEP_LAST_10", "provide_peer_route_suggestion",
+            "source_type", "destination", "route_candidate", "risk_score", "confidence", "estimated_time_min", "advice_reason");
+        appendCommandFlow(contract, "routeAdvice", "CAR-CQ-001|CAR-CQ-002|UAV-CQ-007", "CABIN-CAR-CQ-001|CAR-CQ-001|CN-BACKBONE-CQ",
+            "urban/route/advice.dsl", "urban.RouteAdvice", "ROUTE_ADVICE",
+            "RELIABLE_KEEP_LAST_10", "feed_route_fusion",
+            "route_candidate", "risk_score", "confidence", "advice_reason", "required_topics");
+        appendCommandFlow(contract, "finalDecision", "CAR-CQ-001", "CABIN-CAR-CQ-001",
+            "urban/route/final_decision.dsl", "urban.RouteDecision", "FINAL_ROUTE_DECISION",
+            "RELIABLE_KEEP_LAST_10", "explain_vehicle_self_decision_to_passenger",
+            "decision_owner", "autonomy_mode", "final_route", "final_risk_score", "confidence", "advice_sources", "passenger_explanation", "fusion_reason");
+        contract.append("        safetyRule noRemoteDispatch = \"wide_area_backbone_may_publish_context_but_must_not_publish_dispatch_command\";\n");
+        contract.append("    }\n");
+        return contract.toString();
     }
 
     private String generateDdsIdlBinding(NLUResult result, Intent intent) {
-        StringBuilder state = new StringBuilder();
-        state.append("\n    state ddsIdlBinding {\n");
-        state.append("        string idl_file = \"idl/urban_intent_collaboration.idl\";\n");
-        state.append("        string binding_1 = \"cabin/passenger/intent.dsl -> urban.MissionCommand\";\n");
-        state.append("        string binding_2 = \"urban/vehicle/telemetry.dsl -> urban.VehicleTelemetry\";\n");
-        state.append("        string binding_3 = \"urban/uav/aerial_perception.dsl -> urban.EnvironmentPerception\";\n");
-        state.append("        string binding_4 = \"urban/rsu/road_event.dsl -> urban.RsuRoadEvent\";\n");
-        state.append("        string binding_5 = \"backbone/compliant/context.dsl -> urban.CompliantNetworkContext\";\n");
-        state.append("        string binding_6 = \"urban/route/advice.dsl -> urban.RouteAdvice\";\n");
-        state.append("        string binding_7 = \"urban/route/final_decision.dsl -> urban.RouteDecision\";\n");
-        state.append("    }\n");
-        return state.toString();
+        StringBuilder contract = new StringBuilder();
+        contract.append("\n    ddsIdlBinding {\n");
+        appendBinding(contract, "passengerIntent", "cabin/passenger/intent.dsl", "urban.MissionCommand", "RELIABLE_KEEP_LAST_10");
+        appendBinding(contract, "vehicleTelemetry", "urban/vehicle/telemetry.dsl", "urban.VehicleTelemetry", "BEST_EFFORT_SENSOR_STREAM");
+        appendBinding(contract, "uavForwardPerception", "urban/uav/aerial_perception.dsl", "urban.EnvironmentPerception", "BEST_EFFORT_SENSOR_STREAM");
+        appendBinding(contract, "rsuRoadEvent", "urban/rsu/road_event.dsl", "urban.RsuRoadEvent", "RELIABLE_KEEP_LAST_10");
+        appendBinding(contract, "compliantBackboneContext", "backbone/compliant/context.dsl", "urban.CompliantNetworkContext", "RELIABLE_KEEP_LAST_10");
+        appendBinding(contract, "routeAdvice", "urban/route/advice.dsl", "urban.RouteAdvice", "RELIABLE_KEEP_LAST_10");
+        appendBinding(contract, "finalDecision", "urban/route/final_decision.dsl", "urban.RouteDecision", "RELIABLE_KEEP_LAST_10");
+        contract.append("    }\n");
+        return contract.toString();
+    }
+
+    private void appendDataFlow(StringBuilder contract, String name, String from, String to,
+                                String topic, String idlType, String qos, String purpose,
+                                String... fields) {
+        contract.append("        dataFlow ").append(name)
+            .append(" from \"").append(escape(from)).append("\"")
+            .append(" to \"").append(escape(to)).append("\"")
+            .append(" topic \"").append(escape(topic)).append("\"")
+            .append(" uses ").append(idlType)
+            .append(" fields ").append(formatFieldList(fields))
+            .append(" qos ").append(qos)
+            .append(" purpose \"").append(escape(purpose)).append("\";\n");
+    }
+
+    private void appendCommandFlow(StringBuilder contract, String name, String from, String to,
+                                   String topic, String idlType, String kind, String qos, String effect,
+                                   String... fields) {
+        contract.append("        commandFlow ").append(name)
+            .append(" from \"").append(escape(from)).append("\"")
+            .append(" to \"").append(escape(to)).append("\"")
+            .append(" topic \"").append(escape(topic)).append("\"")
+            .append(" uses ").append(idlType)
+            .append(" kind ").append(kind)
+            .append(" fields ").append(formatFieldList(fields))
+            .append(" qos ").append(qos)
+            .append(" effect \"").append(escape(effect)).append("\";\n");
+    }
+
+    private void appendBinding(StringBuilder contract, String name, String topic, String idlType, String qos) {
+        contract.append("        binding ").append(name)
+            .append(" topic \"").append(escape(topic)).append("\"")
+            .append(" uses ").append(idlType)
+            .append(" idl \"idl/urban_intent_collaboration.idl\"")
+            .append(" qos ").append(qos)
+            .append(";\n");
+    }
+
+    private String formatFieldList(String... fields) {
+        if (fields == null || fields.length == 0) {
+            return "[]";
+        }
+        return "[" + String.join(", ", fields) + "]";
     }
 
     private Set<String> buildPublishTopics(NLUResult result, Intent intent) {

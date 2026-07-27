@@ -1,0 +1,25 @@
+{
+  "devices": [
+    {
+      "agentId": "UAV-CQ-007",
+      "role": "UAV",
+      "protocol": "DJI-STYLE",
+      "initialRoute": "route_A_main_road",
+      "vendor": "DJI-compatible"
+    },
+    {
+      "agentId": "CAR-CQ-001",
+      "role": "EGO_CAR",
+      "protocol": "ROS2-DDS",
+      "initialRoute": "route_A_main_road",
+      "vendor": "ROS2 vehicle"
+    },
+    {
+      "agentId": "PEER-CAR-031",
+      "role": "PEER_CAR",
+      "protocol": "GENERIC-PRIVATE-JSON",
+      "initialRoute": "route_A_main_road",
+      "vendor": "generic peer car"
+    }
+  ]
+}

@@ -13,6 +13,7 @@ public class SimulationTickResult {
     public final Map<String, Object> worldState;
     public final List<Map<String, Object>> ddsMessages;
     public final List<Map<String, Object>> agentAdvice;
+    public final List<Map<String, Object>> deviceCoordinationAdvice;
     public final Map<String, Object> plannerResult;
     public final Map<String, Object> conflictResolution;
     public final Map<String, Object> finalDecision;
@@ -21,6 +22,7 @@ public class SimulationTickResult {
                                 Map<String, Object> worldState,
                                 List<Map<String, Object>> ddsMessages,
                                 List<Map<String, Object>> agentAdvice,
+                                List<Map<String, Object>> deviceCoordinationAdvice,
                                 Map<String, Object> plannerResult,
                                 Map<String, Object> conflictResolution,
                                 Map<String, Object> finalDecision) {
@@ -28,6 +30,7 @@ public class SimulationTickResult {
         this.worldState = worldState;
         this.ddsMessages = ddsMessages;
         this.agentAdvice = agentAdvice;
+        this.deviceCoordinationAdvice = deviceCoordinationAdvice;
         this.plannerResult = plannerResult;
         this.conflictResolution = conflictResolution;
         this.finalDecision = finalDecision;
@@ -39,6 +42,8 @@ public class SimulationTickResult {
         map.put("worldState", worldState);
         map.put("ddsMessages", new ArrayList<Map<String, Object>>(ddsMessages));
         map.put("agentAdvice", new ArrayList<Map<String, Object>>(agentAdvice));
+        map.put("deviceCoordinationAdvice", new ArrayList<Map<String, Object>>(deviceCoordinationAdvice));
+        map.put("coordinationAdvice", new ArrayList<Map<String, Object>>(deviceCoordinationAdvice));
         map.put("plannerResult", plannerResult);
         map.put("conflictResolution", conflictResolution);
         map.put("finalDecision", finalDecision);

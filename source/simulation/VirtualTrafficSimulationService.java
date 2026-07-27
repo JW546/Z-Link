@@ -50,6 +50,7 @@ public class VirtualTrafficSimulationService {
                 VirtualDDSMessageBus.TOPIC_ROADSIDE_RISK_EVENT,
                 VirtualDDSMessageBus.TOPIC_NEIGHBOR_STATUS,
                 VirtualDDSMessageBus.TOPIC_ROUTE_SUGGESTION,
+                VirtualDDSMessageBus.TOPIC_DEVICE_COORDINATION_ADVICE,
                 VirtualDDSMessageBus.TOPIC_FINAL_DECISION,
                 VirtualDDSMessageBus.TOPIC_REPLANNING_REQUEST));
             result.add(item);
@@ -102,6 +103,9 @@ public class VirtualTrafficSimulationService {
         world.finalExplanation = explanation;
         world.vehicle.currentRouteId = finalRoute;
 
+        List<Map<String, Object>> coordinationAdvice = buildDeviceCoordinationAdvice(messages, plannerResult, conflict, finalRoute);
+        messages.addAll(publishDeviceCoordinationAdvice(coordinationAdvice));
+
         DDSMessage finalDecisionMessage = publishFinalDecision(finalRoute, explanation, conflict);
         messages.add(finalDecisionMessage);
         if (Boolean.TRUE.equals(conflict.get("whetherReplanningTriggered"))) {
@@ -117,9 +121,11 @@ public class VirtualTrafficSimulationService {
         finalDecision.put("tick", world.tick);
         finalDecision.put("ddsTopic", VirtualDDSMessageBus.TOPIC_FINAL_DECISION);
         finalDecision.put("replanningTriggered", conflict.get("whetherReplanningTriggered"));
+        finalDecision.put("coordinationAdviceTopic", VirtualDDSMessageBus.TOPIC_DEVICE_COORDINATION_ADVICE);
+        finalDecision.put("coordinationAdviceCount", coordinationAdvice.size());
 
         lastTickResult = new SimulationTickResult(world.tick, world.toMap(), ddsMaps,
-            adviceMaps, plannerResult, conflict, finalDecision);
+            adviceMaps, coordinationAdvice, plannerResult, conflict, finalDecision);
         return lastTickResult;
     }
 
@@ -147,6 +153,8 @@ public class VirtualTrafficSimulationService {
         state.put("lastTickResult", lastTickResult == null ? new LinkedHashMap<String, Object>() : lastTickResult.toMap());
         if (lastTickResult != null) {
             state.put("agentAdvice", lastTickResult.agentAdvice);
+            state.put("deviceCoordinationAdvice", lastTickResult.deviceCoordinationAdvice);
+            state.put("coordinationAdvice", lastTickResult.deviceCoordinationAdvice);
             state.put("plannerResult", lastTickResult.plannerResult);
             state.put("conflictResolution", lastTickResult.conflictResolution);
             state.put("finalDecision", lastTickResult.finalDecision);
@@ -248,6 +256,176 @@ public class VirtualTrafficSimulationService {
         return result;
     }
 
+
+    /**
+     * Decision agent layer: consumes the current tick's DDS/DSL evidence and computes
+     * route planning plus device-to-device coordination advice. This is not a stored
+     * text template: thresholds, target devices, and advice content are selected from
+     * live route risk, congestion, queue, following-risk, confidence, and DSL intent.
+     */
+    private List<Map<String, Object>> buildDeviceCoordinationAdvice(List<DDSMessage> messages,
+                                                                    Map<String, Object> plannerResult,
+                                                                    Map<String, Object> conflict,
+                                                                    String finalRoute) {
+        Evidence evidence = extractEvidence(messages, finalRoute);
+        VirtualRoadNetwork.VirtualRoute selected = world.roadNetwork.route(finalRoute);
+        if (selected != null) {
+            evidence.selectedRouteRisk = selected.riskScore;
+            evidence.selectedRouteCongestion = selected.congestionLevel;
+            evidence.selectedRouteMinutes = selected.estimatedMinutes;
+        }
+        Map<String, Object> riskAware = castMap(plannerResult.get("riskAware"));
+        String plannerRoute = String.valueOf(riskAware.getOrDefault("routeId", finalRoute));
+        boolean safetyFirst = containsAny(world.naturalLanguageTask, "安全", "safety", "避开", "avoid");
+        boolean urgent = containsAny(world.naturalLanguageTask, "尽快", "紧急", "医院", "urgent", "hospital");
+        String dslConstraint = (urgent ? "urgent_destination" : "normal_destination")
+            + "+" + (safetyFirst ? "safety_first" : "balanced")
+            + "+avoid_congestion";
+
+        List<Map<String, Object>> result = new ArrayList<Map<String, Object>>();
+        double routeScore = clamp(1.0 - evidence.selectedRouteRisk * 0.44
+            - evidence.selectedRouteCongestion * 0.30
+            - evidence.mainRouteRisk * 0.16
+            + evidence.averageConfidence * 0.10);
+
+        String vehicleAction = world.vehicle.currentRouteId == null || !world.vehicle.currentRouteId.equals(finalRoute)
+            ? "SWITCH_ROUTE" : "MAINTAIN_ROUTE";
+        result.add(coordinationAdvice(
+            "AGENT-FUSION-CORE", "CAR-CQ-001", vehicleAction,
+            finalRoute,
+            "按风险感知规划结果执行 " + finalRoute
+                + "；当前主路风险=" + pct(evidence.mainRouteRisk)
+                + "，目标路线风险=" + pct(evidence.selectedRouteRisk)
+                + "，拥堵=" + pct(evidence.selectedRouteCongestion) + "。",
+            dslConstraint, routeScore, evidence));
+
+        String uavAction = evidence.mainRouteRisk > 0.58 || evidence.selectedRouteCongestion > 0.38
+            ? "CONTINUE_FORWARD_OBSERVATION" : "VERIFY_HOSPITAL_APPROACH";
+        result.add(coordinationAdvice(
+            "AGENT-FUSION-CORE", "UAV-CQ-007", uavAction,
+            finalRoute,
+            "继续观测 " + finalRoute + " 与医院入口，重点复核受影响路线="
+                + evidence.affectedRoute + " 的拥堵和风险变化；若风险继续上升，立即通过 DDS 更新观测。",
+            dslConstraint, clamp(0.55 + evidence.mainRouteRisk * 0.28 + evidence.selectedRouteCongestion * 0.18), evidence));
+
+        String rsuAction = evidence.mainRouteRisk > 0.60 ? "BROADCAST_RISK_AND_GREEN_WAVE" : "MAINTAIN_GREEN_WAVE_SUPPORT";
+        result.add(coordinationAdvice(
+            "AGENT-FUSION-CORE", "RSU-SCHOOL-009", rsuAction,
+            evidence.affectedRoute,
+            "持续广播 " + evidence.affectedRoute + " 风险事件，并为 " + finalRoute
+                + " 提供应急绿波/信号协同；当前 RSU 风险证据=" + pct(evidence.rsuRiskEvidence) + "。",
+            dslConstraint, clamp(0.50 + evidence.rsuRiskEvidence * 0.35 + evidence.averageConfidence * 0.15), evidence));
+
+        String peerAction = evidence.followingRisk > 0.45 || evidence.queueLengthM > 90.0
+            ? "KEEP_SAFE_FOLLOWING_AND_SHARE_QUEUE" : "SHARE_LOCAL_FLOW_STATUS";
+        result.add(coordinationAdvice(
+            "AGENT-FUSION-CORE", "PEER-CAR-031", peerAction,
+            evidence.affectedRoute,
+            "保持安全跟驰并继续上报队列长度；当前队列=" + Math.round(evidence.queueLengthM)
+                + "m，跟驰风险=" + pct(evidence.followingRisk)
+                + "，这些数据将影响 CAR-CQ-001 的重规划触发。",
+            dslConstraint, clamp(0.50 + evidence.followingRisk * 0.30 + Math.min(0.20, evidence.queueLengthM / 600.0)), evidence));
+
+        for (Map<String, Object> advice : result) {
+            advice.put("plannerRoute", plannerRoute);
+            advice.put("conflictType", conflict.get("conflictType"));
+            advice.put("replanningTriggered", conflict.get("whetherReplanningTriggered"));
+            advice.put("generationMode", "dynamic_dds_dsl_evidence_driven_agent_planning");
+            advice.put("publishTopic", VirtualDDSMessageBus.TOPIC_DEVICE_COORDINATION_ADVICE);
+        }
+        return result;
+    }
+
+    private List<DDSMessage> publishDeviceCoordinationAdvice(List<Map<String, Object>> adviceList) {
+        List<DDSMessage> published = new ArrayList<DDSMessage>();
+        for (Map<String, Object> advice : adviceList) {
+            String target = String.valueOf(advice.getOrDefault("targetDevice", "ALL"));
+            published.add(bus.publishTo(VirtualDDSMessageBus.TOPIC_DEVICE_COORDINATION_ADVICE,
+                "AGENT-FUSION-CORE", target, advice, DDSQoS.reliable()));
+        }
+        return published;
+    }
+
+    private Map<String, Object> coordinationAdvice(String analyzedBy, String targetDevice,
+                                                   String recommendationType, String route,
+                                                   String recommendation, String dslConstraint,
+                                                   double score, Evidence evidence) {
+        Map<String, Object> item = new LinkedHashMap<String, Object>();
+        item.put("analyzedBy", analyzedBy);
+        item.put("targetDevice", targetDevice);
+        item.put("recommendationType", recommendationType);
+        item.put("route", route);
+        item.put("recommendation", recommendation);
+        item.put("dslConstraint", dslConstraint);
+        item.put("computedScore", round(score));
+        item.put("sourceDevices", new ArrayList<String>(evidence.sourceDevices));
+        item.put("sourceTopics", new ArrayList<String>(evidence.sourceTopics));
+        item.put("evidence", evidence.toMap());
+        return item;
+    }
+
+    private Evidence extractEvidence(List<DDSMessage> messages, String finalRoute) {
+        Evidence evidence = new Evidence();
+        evidence.affectedRoute = "route_A_main_road";
+        double confidenceSum = 0.0;
+        int confidenceCount = 0;
+        for (DDSMessage message : messages) {
+            addUnique(evidence.sourceDevices, message.sourceId);
+            addUnique(evidence.sourceTopics, message.topic);
+            confidenceSum += message.confidence;
+            confidenceCount += 1;
+            Map<String, Object> payload = message.payload;
+            String affectedRoute = string(payload, "affectedRoute", "");
+            if (!affectedRoute.isBlank()) evidence.affectedRoute = affectedRoute;
+            evidence.mainRouteRisk = Math.max(evidence.mainRouteRisk, number(payload, "affectedRiskScore", 0.0));
+            evidence.mainRouteCongestion = Math.max(evidence.mainRouteCongestion, number(payload, "congestionLevel", 0.0));
+            if (message.sourceId.contains("RSU")) {
+                evidence.rsuRiskEvidence = Math.max(evidence.rsuRiskEvidence,
+                    number(payload, "affectedRiskScore", number(payload, "riskScore", 0.0)));
+            }
+            evidence.queueLengthM = Math.max(evidence.queueLengthM, number(payload, "queueLengthM", 0.0));
+            evidence.followingRisk = Math.max(evidence.followingRisk, number(payload, "followingRisk", 0.0));
+        }
+        evidence.averageConfidence = confidenceCount == 0 ? 0.0 : confidenceSum / confidenceCount;
+        VirtualRoadNetwork.VirtualRoute selected = world.roadNetwork.route(finalRoute);
+        if (selected != null) {
+            evidence.selectedRouteRisk = selected.riskScore;
+            evidence.selectedRouteCongestion = selected.congestionLevel;
+            evidence.selectedRouteMinutes = selected.estimatedMinutes;
+        }
+        return evidence;
+    }
+
+    private static class Evidence {
+        final List<String> sourceDevices = new ArrayList<String>();
+        final List<String> sourceTopics = new ArrayList<String>();
+        String affectedRoute = "route_A_main_road";
+        double mainRouteRisk;
+        double mainRouteCongestion;
+        double selectedRouteRisk;
+        double selectedRouteCongestion;
+        double selectedRouteMinutes;
+        double rsuRiskEvidence;
+        double queueLengthM;
+        double followingRisk;
+        double averageConfidence;
+
+        Map<String, Object> toMap() {
+            Map<String, Object> map = new LinkedHashMap<String, Object>();
+            map.put("affectedRoute", affectedRoute);
+            map.put("mainRouteRisk", round(mainRouteRisk));
+            map.put("mainRouteCongestion", round(mainRouteCongestion));
+            map.put("selectedRouteRisk", round(selectedRouteRisk));
+            map.put("selectedRouteCongestion", round(selectedRouteCongestion));
+            map.put("selectedRouteMinutes", round(selectedRouteMinutes));
+            map.put("rsuRiskEvidence", round(rsuRiskEvidence));
+            map.put("queueLengthM", round(queueLengthM));
+            map.put("followingRisk", round(followingRisk));
+            map.put("averageConfidence", round(averageConfidence));
+            return map;
+        }
+    }
+
     private DDSMessage publishFinalDecision(String route, String explanation, Map<String, Object> conflict) {
         return bus.publish(VirtualDDSMessageBus.TOPIC_FINAL_DECISION, "CAR-CQ-001",
             payload("tick", world.tick, "route", route, "riskScore", conflict.get("riskScore"),
@@ -290,6 +468,34 @@ public class VirtualTrafficSimulationService {
             result.add(candidate.toMap());
         }
         return result;
+    }
+
+
+    private void addUnique(List<String> values, String value) {
+        if (value != null && !value.isBlank() && !values.contains(value)) {
+            values.add(value);
+        }
+    }
+
+    private boolean containsAny(String text, String... terms) {
+        if (text == null) return false;
+        String lower = text.toLowerCase();
+        for (String term : terms) {
+            if (lower.contains(term.toLowerCase())) return true;
+        }
+        return false;
+    }
+
+    private String pct(double value) {
+        return Math.round(clamp(value) * 100.0) + "%";
+    }
+
+    private static double clamp(double value) {
+        return Math.max(0.0, Math.min(1.0, value));
+    }
+
+    private static double round(double value) {
+        return Math.round(value * 1000.0) / 1000.0;
     }
 
     private AgentRole role(String sourceId) {

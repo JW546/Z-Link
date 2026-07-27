@@ -1,0 +1,10 @@
+string message_id
+string source_id
+string target_id
+uint64 timestamp_ms
+string mission_id
+string selected_strategy
+string selected_route
+string baseline_comparison
+string explanation
+bool ros2_dds_ready

@@ -17,6 +17,22 @@ SEQUENCE: 'sequence';
 SELECTOR: 'selector';
 BEHAVIOR_TREE: 'behaviorTree';
 UNIT_TYPE: 'UnitType';
+DATA_EXCHANGE_CONTRACT: 'dataExchangeContract';
+COMMAND_EXCHANGE_CONTRACT: 'commandExchangeContract';
+DDS_IDL_BINDING: 'ddsIdlBinding';
+DATA_FLOW: 'dataFlow';
+COMMAND_FLOW: 'commandFlow';
+BINDING: 'binding';
+SAFETY_RULE: 'safetyRule';
+FROM: 'from';
+TO: 'to';
+USES: 'uses';
+IDL: 'idl';
+FIELDS: 'fields';
+QOS: 'qos';
+PURPOSE: 'purpose';
+KIND: 'kind';
+EFFECT: 'effect';
 BOOLEAN: 'true' | 'false';
 
 // 标识符
@@ -41,7 +57,7 @@ tailorProgram: topicDeclaration+;
 
 topicDeclaration: 
     TOPIC IDENTIFIER LBRACE 
-    (taskDeclaration | pathPlanning | transportationState)* 
+    (taskDeclaration | pathPlanning | transportationState | dataExchangeContract | commandExchangeContract | ddsIdlBinding)* 
     RBRACE;
 
 taskDeclaration: 
@@ -52,6 +68,38 @@ pathPlanning:
 
 transportationState: 
     annotation* STATE IDENTIFIER LBRACE fieldDeclaration* RBRACE;
+
+dataExchangeContract:
+    DATA_EXCHANGE_CONTRACT LBRACE dataFlowDeclaration+ RBRACE;
+
+dataFlowDeclaration:
+    DATA_FLOW IDENTIFIER FROM endpoint TO endpoint TOPIC STRING USES qualifiedName
+    FIELDS fieldList QOS IDENTIFIER PURPOSE STRING SEMICOLON;
+
+commandExchangeContract:
+    COMMAND_EXCHANGE_CONTRACT LBRACE (commandFlowDeclaration | safetyRuleDeclaration)+ RBRACE;
+
+commandFlowDeclaration:
+    COMMAND_FLOW IDENTIFIER FROM endpoint TO endpoint TOPIC STRING USES qualifiedName
+    KIND IDENTIFIER FIELDS fieldList QOS IDENTIFIER EFFECT STRING SEMICOLON;
+
+safetyRuleDeclaration:
+    SAFETY_RULE IDENTIFIER EQUAL STRING SEMICOLON;
+
+ddsIdlBinding:
+    DDS_IDL_BINDING LBRACE ddsBindingDeclaration+ RBRACE;
+
+ddsBindingDeclaration:
+    BINDING IDENTIFIER TOPIC STRING USES qualifiedName IDL STRING QOS IDENTIFIER SEMICOLON;
+
+endpoint:
+    STRING | IDENTIFIER;
+
+qualifiedName:
+    IDENTIFIER ('.' IDENTIFIER)*;
+
+fieldList:
+    LBRACKET IDENTIFIER (COMMA IDENTIFIER)* RBRACKET;
 
 annotation:
     AT IDENTIFIER LPAREN annotationValue? RPAREN;

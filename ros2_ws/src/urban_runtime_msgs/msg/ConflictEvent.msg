@@ -1,0 +1,10 @@
+string message_id
+string source_id
+string target_id
+uint64 timestamp_ms
+string conflict_id
+string conflict_type
+string[] involved_agents
+string route
+float64 severity
+string explanation

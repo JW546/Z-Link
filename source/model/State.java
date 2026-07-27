@@ -31,6 +31,10 @@ public class State extends AbstractDSLEntity {
             fields.put(key, converted);
         }
     }
+
+    public void addRawField(String key, String value) {
+        fields.put(key, value);
+    }
     
     /**
      * 检查是否是 ID 字段（不应该进行单位转换）

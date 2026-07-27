@@ -94,7 +94,7 @@ function JsonInspector({ value, title = "原始 JSON" }: { value: unknown; title
 }
 
 function WorkflowStepper({ replanning }: { replanning: boolean }) {
-  const steps = ["乘客意图", "DSL 任务契约", "DDS 发布订阅", "Agent 建议", "冲突消解", "最终决策", replanning ? "重规划/评估" : "策略评估"];
+  const steps = ["乘客意图", "DSL 任务契约", "DDS 发布订阅", "Agent 规划与协同建议", "冲突消解", "最终决策", replanning ? "重规划/评估" : "策略评估"];
   return (
     <section className="workflowStepper" aria-label="任务闭环 Timeline">
       {steps.map((step, index) => (
@@ -426,12 +426,156 @@ function VirtualTrafficSimulationPanel({
   const routes = asList(roadNetwork.routes);
   const devices = asList(world.devices);
   const resultAdvice = asList(effectiveTickResult.agentAdvice);
+  const coordinationAdvice = asList(effectiveTickResult.deviceCoordinationAdvice ?? effectiveTickResult.coordinationAdvice ?? state.deviceCoordinationAdvice ?? state.coordinationAdvice);
   const plannerResult = asMap(effectiveTickResult.plannerResult);
   const conflict = asMap(effectiveTickResult.conflictResolution);
   const finalDecision = asMap(effectiveTickResult.finalDecision);
   const currentTick = asText(state.currentTick ?? effectiveTickResult.tick, "0");
   const running = Boolean(state.running);
   const nodeById = new Map(nodes.map((node) => [asText(node.nodeId), node]));
+  const finalRouteId = asText(finalDecision.route ?? world.finalRouteId, "");
+  const finalRouteKey = finalRouteId.toLowerCase();
+
+  const clampPercent = (value: unknown, min = 3, max = 97) => Math.max(min, Math.min(max, asNumber(value, 0)));
+
+  const edgeEndpointText = (edge: DashboardMap) => `${asText(edge.fromNodeId)} ${asText(edge.toNodeId)} ${asText(edge.edgeId)} ${asText(edge.label)}`.toLowerCase();
+
+  const hasBoth = (text: string, a: string[], b: string[]) =>
+    a.some((token) => text.includes(token)) && b.some((token) => text.includes(token));
+
+  const edgeMatchesFinalRoute = (edge: DashboardMap) => {
+    if (!finalRouteKey) return false;
+
+    const explicitRouteText = [
+      edge.routeId,
+      edge.routeIds,
+      edge.routes,
+      edge.route,
+      edge.routeName,
+      edge.pathId,
+      edge.edgeId
+    ]
+      .map((item) => asText(item, ""))
+      .join(" ")
+      .toLowerCase();
+
+    if (explicitRouteText.includes(finalRouteKey)) return true;
+
+    const text = edgeEndpointText(edge);
+    if (finalRouteKey.includes("emergency") || finalRouteKey.includes("green_wave") || finalRouteKey.includes("green")) {
+      return (
+        hasBoth(text, ["origin", "passenger", "start"], ["main", "junction"]) ||
+        hasBoth(text, ["main", "junction"], ["emergency", "green"]) ||
+        hasBoth(text, ["emergency", "green"], ["hospital", "destination", "target"])
+      );
+    }
+
+    if (finalRouteKey.includes("elevated") || finalRouteKey.includes("detour")) {
+      return (
+        hasBoth(text, ["origin", "passenger", "start"], ["main", "junction"]) ||
+        hasBoth(text, ["main", "junction"], ["elevated", "detour"]) ||
+        hasBoth(text, ["elevated", "detour"], ["hospital", "destination", "target"])
+      );
+    }
+
+    if (finalRouteKey.includes("main")) {
+      return (
+        hasBoth(text, ["origin", "passenger", "start"], ["main", "junction"]) ||
+        hasBoth(text, ["main", "junction"], ["hospital", "destination", "target"]) ||
+        hasBoth(text, ["main", "junction"], ["school"]) ||
+        hasBoth(text, ["school"], ["hospital", "destination", "target"])
+      );
+    }
+
+    return false;
+  };
+
+  const deviceKind = (device: DashboardMap) => {
+    const type = asText(device.deviceType).toUpperCase();
+    const id = asText(device.deviceId).toUpperCase();
+    if (type.includes("UAV") || id.includes("UAV")) return "uav";
+    if (type.includes("RSU") || id.includes("RSU")) return "rsu";
+    if (type.includes("NEIGHBOR") || id.includes("PEER")) return "peer";
+    return "vehicle";
+  };
+
+  const deviceIcon = (kind: string) => {
+    if (kind === "uav") return "UAV";
+    if (kind === "rsu") return "RSU";
+    if (kind === "peer") return "PEER";
+    return "CAR";
+  };
+
+  const deviceOffset = (device: DashboardMap, index: number) => {
+    const kind = deviceKind(device);
+    const x = asNumber(device.x);
+    const y = asNumber(device.y);
+    const clusterShift = [
+      { dx: -1.2, dy: -1.2 },
+      { dx: 1.2, dy: -1.2 },
+      { dx: 1.2, dy: 1.2 },
+      { dx: -1.2, dy: 1.2 }
+    ][index % 4];
+
+    const nearRight = x > 82;
+    const nearLeft = x < 12;
+
+    const base =
+      kind === "uav"
+        ? { dx: nearRight ? -8 : 0, dy: -9 }
+        : kind === "rsu"
+          ? { dx: -8, dy: 0 }
+          : kind === "peer"
+            ? { dx: nearRight ? -12 : 8, dy: -3 }
+            : { dx: nearRight ? -9 : 0, dy: 8 };
+
+    const destinationCluster = x > 70 && y < 45;
+    const destinationExtra =
+      destinationCluster && kind === "uav"
+        ? { dx: -7, dy: -11 }
+        : destinationCluster && kind === "peer"
+          ? { dx: -9, dy: -2 }
+          : destinationCluster && kind === "vehicle"
+            ? { dx: -4, dy: 11 }
+            : { dx: 0, dy: 0 };
+
+    return {
+      x: clampPercent(x + base.dx + destinationExtra.dx + clusterShift.dx, nearLeft ? 5 : 3, nearRight ? 90 : 97),
+      y: clampPercent(y + base.dy + destinationExtra.dy + clusterShift.dy, 5, 95)
+    };
+  };
+
+  const nodeLabelStyle = (node: DashboardMap) => {
+    const id = asText(node.nodeId).toLowerCase();
+    const label = asText(node.label).toLowerCase();
+    if (id.includes("hospital") || id.includes("destination") || label.includes("hospital")) {
+      return { transform: "translate(-50%, 18px)" };
+    }
+    if (id.includes("elevated") || label.includes("elevated")) {
+      return { transform: "translate(-50%, -30px)" };
+    }
+    if (id.includes("school") || label.includes("school")) {
+      return { transform: "translate(-50%, 20px)" };
+    }
+    return { transform: "translate(-50%, 18px)" };
+  };
+
+  const nodeDisplayLabel = (node: DashboardMap) => {
+    const id = `${asText(node.nodeId)} ${asText(node.label)}`.toLowerCase();
+    if (id.includes("origin") || id.includes("passenger") || id.includes("start")) return "乘客起点";
+    if (id.includes("main") || id.includes("junction")) return "主路路口";
+    if (id.includes("elevated") || id.includes("detour")) return "高架绕行";
+    if (id.includes("school")) return "学校区域";
+    if (id.includes("emergency") || id.includes("green")) return "应急绿波";
+    if (id.includes("hospital") || id.includes("destination") || id.includes("target")) return "医院终点";
+    return asText(node.label);
+  };
+
+  const deviceDisplayId = (device: DashboardMap) => {
+    const raw = asText(device.deviceId).replace("-CQ-", "-").trim();
+    const firstPart = raw.split(/\s+/)[0];
+    return firstPart || raw;
+  };
 
   return (
     <section id="simulation" className="simulationDeck cardPanel">
@@ -458,45 +602,76 @@ function VirtualTrafficSimulationPanel({
 
       <div className="simulationGrid">
         <div className="topologyCanvas">
-          {edges.map((edge) => {
-            const from = nodeById.get(asText(edge.fromNodeId));
-            const to = nodeById.get(asText(edge.toNodeId));
-            if (!from || !to) return null;
-            const x1 = asNumber(from.x);
-            const y1 = asNumber(from.y);
-            const x2 = asNumber(to.x);
-            const y2 = asNumber(to.y);
-            const congestion = asNumber(edge.congestionLevel);
-            const risk = asNumber(edge.riskScore);
+          <svg className="topologySvg" viewBox="0 0 100 100" preserveAspectRatio="none" aria-label="virtual traffic topology">
+            {edges.map((edge) => {
+              const from = nodeById.get(asText(edge.fromNodeId));
+              const to = nodeById.get(asText(edge.toNodeId));
+              if (!from || !to) return null;
+              const congestion = asNumber(edge.congestionLevel);
+              const risk = asNumber(edge.riskScore);
+              const tone = risk > 0.55 ? "danger" : congestion > 0.6 ? "warn" : "normal";
+              return (
+                <line
+                  key={asText(edge.edgeId)}
+                  className={`roadEdgeLine ${tone} ${finalRouteId && !edgeMatchesFinalRoute(edge) ? "nonFinal" : ""}`}
+                  x1={clampPercent(from.x, 0, 100)}
+                  y1={clampPercent(from.y, 0, 100)}
+                  x2={clampPercent(to.x, 0, 100)}
+                  y2={clampPercent(to.y, 0, 100)}
+                  vectorEffect="non-scaling-stroke"
+                >
+                  <title>{`${asText(edge.edgeId)} congestion=${percent(congestion)} risk=${percent(risk)}`}</title>
+                </line>
+              );
+            })}
+
+            {finalRouteId ? edges.filter(edgeMatchesFinalRoute).map((edge) => {
+              const from = nodeById.get(asText(edge.fromNodeId));
+              const to = nodeById.get(asText(edge.toNodeId));
+              if (!from || !to) return null;
+              return (
+                <line
+                  key={`final-${asText(edge.edgeId)}`}
+                  className="finalRouteLine"
+                  x1={clampPercent(from.x, 0, 100)}
+                  y1={clampPercent(from.y, 0, 100)}
+                  x2={clampPercent(to.x, 0, 100)}
+                  y2={clampPercent(to.y, 0, 100)}
+                  vectorEffect="non-scaling-stroke"
+                >
+                  <title>{`最终路线 ${finalRouteId}: ${asText(edge.edgeId)}`}</title>
+                </line>
+              );
+            }) : null}
+          </svg>
+
+          {nodes.map((node) => (
+            <div
+              key={asText(node.nodeId)}
+              className="roadNode"
+              style={{ left: `${clampPercent(node.x)}%`, top: `${clampPercent(node.y)}%` }}
+              title={`${asText(node.nodeId)} · ${asText(node.label)}`}
+            >
+              <span style={nodeLabelStyle(node)}>{nodeDisplayLabel(node)}</span>
+            </div>
+          ))}
+
+          {devices.map((device, index) => {
+            const kind = deviceKind(device);
+            const position = deviceOffset(device, index);
+            const deviceLabel = deviceDisplayId(device);
             return (
               <div
-                key={asText(edge.edgeId)}
-                className={risk > 0.55 ? "roadEdge danger" : congestion > 0.6 ? "roadEdge warn" : "roadEdge"}
-                style={{
-                  left: `${x1}%`,
-                  top: `${y1}%`,
-                  width: `${Math.hypot(x2 - x1, y2 - y1)}%`,
-                  transform: `rotate(${Math.atan2(y2 - y1, x2 - x1)}rad)`
-                }}
-                title={`${asText(edge.edgeId)} congestion=${percent(congestion)} risk=${percent(risk)}`}
-              />
+                key={asText(device.deviceId)}
+                className={`simDevice ${kind} ${position.x > 84 ? "nearRight" : ""} ${position.x < 12 ? "nearLeft" : ""} ${position.y < 12 ? "nearTop" : ""} ${position.y > 88 ? "nearBottom" : ""}`}
+                style={{ left: `${position.x}%`, top: `${position.y}%` }}
+                title={`${asText(device.deviceId)} · ${asText(device.deviceType)} · ${asText(device.status)} · tick ${currentTick}`}
+              >
+                <span className="deviceIcon">{deviceIcon(kind)}</span>
+                <span className="deviceLabel">{deviceLabel}</span>
+              </div>
             );
           })}
-          {nodes.map((node) => (
-            <div key={asText(node.nodeId)} className="roadNode" style={{ left: `${asNumber(node.x)}%`, top: `${asNumber(node.y)}%` }}>
-              <span>{asText(node.label)}</span>
-            </div>
-          ))}
-          {devices.map((device) => (
-            <div
-              key={asText(device.deviceId)}
-              className={`simDevice ${asText(device.deviceType).includes("UAV") ? "uav" : asText(device.deviceType).includes("RSU") ? "rsu" : asText(device.deviceType).includes("NEIGHBOR") ? "peer" : "vehicle"}`}
-              style={{ left: `${asNumber(device.x)}%`, top: `${asNumber(device.y)}%` }}
-              title={`${asText(device.deviceId)} ${asText(device.status)}`}
-            >
-              {asText(device.deviceId).replace("-CQ-", "-")}
-            </div>
-          ))}
         </div>
 
         <div className="simulationSide">
@@ -507,7 +682,7 @@ function VirtualTrafficSimulationPanel({
           <article>
             <h4>候选路线</h4>
             {routes.map((route) => (
-              <div key={asText(route.routeId)} className="routeStat">
+              <div key={asText(route.routeId)} className={`routeStat ${asText(route.routeId).toLowerCase() === finalRouteKey ? "active" : ""}`}>
                 <strong>{asText(route.routeId)}</strong>
                 <span>拥堵 {percent(route.congestionLevel)} / 风险 {percent(route.riskScore)} / {asText(route.estimatedMinutes)} min</span>
               </div>
@@ -535,15 +710,27 @@ function VirtualTrafficSimulationPanel({
           </div>
         </article>
         <article>
-          <h4>Agent 建议</h4>
-          <div className="compactTimeline">
-            {resultAdvice.map((advice, index) => (
-              <div key={`${asText(advice.agentId)}-${index}`}>
-                <span>{asText(advice.role)}</span>
-                <strong>{asText(advice.route)}</strong>
-                <small>{short(advice.explanation, 90)}</small>
-              </div>
-            ))}
+          <h4>决策 Agent：路线规划与设备协同建议</h4>
+          <p className="simulationHint">
+            Agent 读取 DDS/DSL 数据，动态评估风险、拥堵、队列和置信度，然后规划路线并向目标无人设备发布协同建议。
+          </p>
+          <div className="compactTimeline coordinationAdviceList">
+            {(coordinationAdvice.length ? coordinationAdvice : resultAdvice).map((advice, index) => {
+              const evidence = asMap(advice.evidence);
+              const sourceDevices = asText(advice.sourceDevices, asText(advice.role, "DDS 数据"));
+              const target = asText(advice.targetDevice, asText(advice.agentId ?? advice.nodeId, "协同设备"));
+              const recommendation = asText(advice.recommendation ?? advice.explanation ?? advice.advice, "基于 DDS/DSL 证据生成协同建议");
+              return (
+                <div key={`${target}-${asText(advice.recommendationType)}-${index}`}>
+                  <span>{sourceDevices} → {target}</span>
+                  <strong>{asText(advice.recommendationType, asText(advice.route, "设备协同建议"))}</strong>
+                  <small>{short(recommendation, 120)}</small>
+                  <small>
+                    route {asText(advice.route, "-")} · score {asText(advice.computedScore, "-")} · risk {percent(evidence.selectedRouteRisk)} · congestion {percent(evidence.selectedRouteCongestion)}
+                  </small>
+                </div>
+              );
+            })}
           </div>
         </article>
         <article>
@@ -570,6 +757,69 @@ function VirtualTrafficSimulationPanel({
           </div>
           <p>{short(conflict.decisionReason, 180)}</p>
         </article>
+      </div>
+    </section>
+  );
+}
+
+function RuntimeCollaborationPanel({
+  profile,
+  topics,
+  result,
+  running,
+  onRun
+}: {
+  profile: DashboardMap;
+  topics: DashboardMap[];
+  result: DashboardMap;
+  running: boolean;
+  onRun: () => void;
+}) {
+  const finalDecision = asMap(result.finalDecision);
+  const finalPayload = asMap(finalDecision.payload);
+  const nativeFrames = asList(result.nativeProtocolFrames);
+  const conflicts = asList(result.conflictEvents);
+  const replans = asList(result.replanningRequests);
+  return (
+    <section className="cardPanel">
+      <div className="panelHeader">
+        <div>
+          <span className="eyebrow">Backend Runtime</span>
+          <h3>真实后端多 Agent 通信</h3>
+        </div>
+        <StatusBadge tone={result.ok ? "good" : "warn"}>{asText(profile.runtimeMode, "local_tcp_dds_compatible")}</StatusBadge>
+      </div>
+      <div className="detailGridPanel">
+        <article><span>状态频率</span><strong>{asText(profile.defaultStatusIntervalMs, "500")}ms</strong></article>
+        <article><span>Agent 数</span><strong>{asList(profile.agents).length || 4}</strong></article>
+        <article><span>Topic/IDL</span><strong>{topics.length}</strong></article>
+        <article><span>消息数</span><strong>{asText(result.messageCount, "-")}</strong></article>
+        <article><span>冲突事件</span><strong>{conflicts.length}</strong></article>
+        <article><span>重规划</span><strong>{replans.length}</strong></article>
+      </div>
+      <div className="commandBar">
+        <button onClick={onRun} disabled={running}>{running ? "运行中" : "运行一次后端协同"}</button>
+        <span className="supportText">前端只触发和观察，通信、冲突消解、重规划都在后端完成。</span>
+      </div>
+      <div className="compactTimeline">
+        {nativeFrames.slice(0, 3).map((frame, index) => {
+          const payload = asMap(frame.payload);
+          const native = asMap(payload.native);
+          return (
+            <div key={`${asText(frame.sourceId)}-${index}`}>
+              <span>{asText(frame.sourceId)}</span>
+              <strong>{asText(native.protocol)}</strong>
+              <small>{short(native, 120)}</small>
+            </div>
+          );
+        })}
+        {result.ok ? (
+          <div>
+            <span>{asText(finalDecision.sourceId, "COORDINATOR-CQ-001")}</span>
+            <strong>{asText(finalPayload.selectedStrategy)}</strong>
+            <small>{short(finalPayload.explanation, 140)}</small>
+          </div>
+        ) : null}
       </div>
     </section>
   );
@@ -604,6 +854,10 @@ export function WorkbenchPage() {
   const [simulationState, setSimulationState] = useState<DashboardMap>({});
   const [simulationTick, setSimulationTick] = useState<DashboardMap>({});
   const [simulationDdsEvents, setSimulationDdsEvents] = useState<DashboardMap[]>([]);
+  const [runtimeProfile, setRuntimeProfile] = useState<DashboardMap>({});
+  const [runtimeTopics, setRuntimeTopics] = useState<DashboardMap[]>([]);
+  const [runtimeResult, setRuntimeResult] = useState<DashboardMap>({});
+  const [runtimeRunning, setRuntimeRunning] = useState(false);
   const [dashboard, setDashboard] = useState<DashboardMap>({});
   const [activeTab, setActiveTab] = useState("dsl");
   const [faultType, setFaultType] = useState("DEVICE_OFFLINE");
@@ -628,6 +882,8 @@ export function WorkbenchPage() {
       setSimulationState(data);
       setSimulationDdsEvents(asList(data.recentDdsMessages));
     }).catch(() => setSimulationState({}));
+    backend.runtimeProfile().then((data) => setRuntimeProfile(data)).catch(() => setRuntimeProfile({}));
+    backend.runtimeTopics().then((data) => setRuntimeTopics(data.topics ?? [])).catch(() => setRuntimeTopics([]));
     backend.dashboard().then((data) => setDashboard(data.dashboard ?? {})).catch(() => setDashboard({}));
   }, [planResult?.missionId, selectedSimulationScenario]);
 
@@ -738,6 +994,16 @@ export function WorkbenchPage() {
   const stopSimulation = async () => {
     await backend.stopSimulation();
     await refreshSimulation();
+  };
+
+  const runBackendRuntime = async () => {
+    setRuntimeRunning(true);
+    try {
+      const result = await backend.runRuntime(500, 6);
+      setRuntimeResult(result);
+    } finally {
+      setRuntimeRunning(false);
+    }
   };
 
   const detailsSections = {
@@ -877,6 +1143,14 @@ export function WorkbenchPage() {
         onStart={() => void startSimulation()}
         onTick={() => void tickSimulation()}
         onStop={() => void stopSimulation()}
+      />
+
+      <RuntimeCollaborationPanel
+        profile={runtimeProfile}
+        topics={runtimeTopics}
+        result={runtimeResult}
+        running={runtimeRunning}
+        onRun={() => void runBackendRuntime()}
       />
 
       <DetailsTabs active={activeTab} setActive={setActiveTab} debugMode={debugMode} sections={detailsSections} />

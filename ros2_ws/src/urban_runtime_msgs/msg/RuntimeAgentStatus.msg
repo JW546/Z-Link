@@ -1,0 +1,15 @@
+string message_id
+string source_id
+string target_id
+uint64 timestamp_ms
+string agent_id
+string role
+string protocol
+string route
+float64 position_x_m
+float64 position_y_m
+float64 position_z_m
+float64 speed_mps
+float64 battery_pct
+float64 publish_rate_hz
+string mission_status

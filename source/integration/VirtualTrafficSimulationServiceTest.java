@@ -33,12 +33,14 @@ public class VirtualTrafficSimulationServiceTest {
         SimulationTickResult tick = service.tick();
         require(tick.tick == 1, "tick advances to one");
         require(tick.ddsMessages.size() >= 6, "virtual devices publish DDS messages");
-        require(tick.agentAdvice.size() >= 4, "DDS messages generate Agent advice");
+        require(tick.agentAdvice.size() >= 4, "DDS messages generate device evidence");
+        require(tick.deviceCoordinationAdvice.size() >= 4, "Agent computes route planning and device-to-device coordination advice");
         require(!tick.plannerResult.isEmpty(), "planner result is produced");
         require(tick.plannerResult.containsKey("riskAware"), "risk-aware planner output exists");
         require(!tick.conflictResolution.isEmpty(), "conflict resolver produces output");
         require(tick.conflictResolution.containsKey("finalRoute"), "conflict resolver selects final route");
         require(!String.valueOf(tick.finalDecision.get("route")).isBlank(), "final route is published");
+        require(!String.valueOf(tick.deviceCoordinationAdvice.get(0).get("targetDevice")).isBlank(), "coordination advice targets a device");
     }
 
     @SuppressWarnings("unchecked")
@@ -46,6 +48,7 @@ public class VirtualTrafficSimulationServiceTest {
         Map<String, Object> state = service.state();
         require(state.containsKey("world"), "state includes world");
         require(state.containsKey("recentDdsMessages"), "state includes DDS timeline");
+        require(state.containsKey("deviceCoordinationAdvice"), "state includes device coordination advice");
         Map<String, Object> world = (Map<String, Object>) state.get("world");
         require(((List<?>) world.get("devices")).size() >= 4, "world exposes virtual device states");
         Map<String, Object> roadNetwork = (Map<String, Object>) world.get("roadNetwork");

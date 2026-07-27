@@ -1,0 +1,11 @@
+string message_id
+string source_id
+string target_id
+uint64 timestamp_ms
+string mission_id
+string winner
+float64 dijkstra_risk
+float64 greedy_risk
+float64 cooperative_risk
+uint32 conflict_count
+string explanation
