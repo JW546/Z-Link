@@ -68,8 +68,8 @@ public class RuntimeCoordinationPolicy {
                 "role", "UAV",
                 "protocol", "AEP84-STANAG4586",
                 "route", route(aep84Uav),
-                "riskScore", 0.28,
-                "timeAdvantage", 0.66,
+                "riskScore", number(aep84Uav.payload, "riskScore", 0.28),
+                "timeAdvantage", number(aep84Uav.payload, "timeAdvantage", 0.66),
                 "confidence", number(aep84Uav.payload, "confidence", 0.88),
                 "explanation", "AEP84 UAV provides standardized interop status for final route selection")));
         }
