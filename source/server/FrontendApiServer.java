@@ -77,6 +77,7 @@ public class FrontendApiServer {
         DEVICES.add(device("CAR-CQ-001", "EGO_AUTONOMOUS_VEHICLE", true, 14, "车端自主决策节点", 82, "DDS / C-V2X"));
         DEVICES.add(device("CAR-CQ-002", "PEER_AUTONOMOUS_VEHICLE", true, 24, "邻近无人车建议节点", 79, "DDS / Ad Hoc Mesh"));
         DEVICES.add(device("UAV-CQ-007", "AERIAL_FORWARD_PERCEPTION", true, 32, "低空前视感知节点", 76, "DDS / Private 5G"));
+        DEVICES.add(device("UAV-AEP84-001", "AERIAL_INTEROP_UAV", true, 27, "AEP84 标准互操作无人机", 71, "STANAG 4586 / AEP-84"));
         DEVICES.add(device("RSU-SCHOOL-009", "ROADSIDE_UNIT_SCHOOL_ZONE", true, 18, "路侧事件发布节点", 100, "Roadside Ethernet / DDS"));
         DEVICES.add(device("CN-BACKBONE-CQ", "COMPLIANT_CONTEXT_BACKBONE", true, 41, "合规广域态势节点", 100, "5G-A / DDS Router"));
     }
@@ -713,6 +714,7 @@ public class FrontendApiServer {
         response.put("communicationPattern", Arrays.asList("initial_intent_contract", "periodic_status_sync", "event_triggered_conflict_and_replan"));
         response.put("agents", Arrays.asList(
             runtimeAgent("UAV-CQ-007", "UAV", "DJI-STYLE", "runtime/agent/status", "runtime/protocol/native_frame"),
+            runtimeAgent("UAV-AEP84-001", "UAV", "AEP84-STANAG4586", "runtime/agent/status", "runtime/protocol/native_frame"),
             runtimeAgent("CAR-CQ-001", "EGO_CAR", "ROS2-DDS", "runtime/agent/status", "runtime/protocol/native_frame"),
             runtimeAgent("PEER-CAR-031", "PEER_CAR", "GENERIC-PRIVATE-JSON", "runtime/agent/status", "runtime/protocol/native_frame"),
             runtimeAgent("COORDINATOR-CQ-001", "COORDINATOR", "DDS-COMPATIBLE", "runtime/conflict/event,runtime/replanning/request,runtime/decision/final", "runtime/policy/evaluation")

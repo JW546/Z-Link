@@ -1,18 +1,22 @@
 package integration;
 
+import com.google.gson.Gson;
 import collaboration.runtime.Aep84DroneProtocolAdapter;
 import collaboration.runtime.ProtocolAdapterRegistry;
 import collaboration.runtime.RuntimeAgentRole;
 import collaboration.runtime.DeviceProfile;
 
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
 public class Aep84ProtocolAdapterTest {
-    public static void main(String[] args) {
+    public static void main(String[] args) throws Exception {
         testAep84NativeStatusNormalizesToRuntimeStatus();
         testAep84UnifiedStatusRoundTripsToNativeFrame();
         testProtocolAdapterRegistryRecognizesAep84Profile();
+        testRealisticAep84VehicleIdMessageFixture();
         System.out.println("[PASS] AEP84/STANAG4586 protocol adapter test passed.");
     }
 
@@ -91,6 +95,16 @@ public class Aep84ProtocolAdapterTest {
         ProtocolAdapterRegistry registry = new ProtocolAdapterRegistry();
         registry.registerProfile(new DeviceProfile("UAV-AEP84-001", RuntimeAgentRole.UAV, "AEP84-STANAG4586", "route_B_emergency_bypass", "NATO STANAG 4586 / AEP-84"));
         require("AEP84-STANAG4586".equals(registry.adapterForAgent("UAV-AEP84-001").protocolName()), "registry resolves AEP84 adapter");
+    }
+
+    private static void testRealisticAep84VehicleIdMessageFixture() throws Exception {
+        String json = new String(Files.readAllBytes(Paths.get("test-fixtures/aep84_message_20_vehicle_id.json")));
+        Map<String, Object> nativeStatus = new Gson().fromJson(json, Map.class);
+        Map<String, Object> unified = new Aep84DroneProtocolAdapter().fromNativeStatus(nativeStatus);
+        require("UA-101".equals(unified.get("agentId")), "realistic AEP84 Vehicle ID sample preserves vehicle id");
+        require("20".equals(unified.get("messageType")), "realistic AEP84 sample preserves message type");
+        require(Boolean.TRUE.equals(unified.get("ackRequired")), "realistic AEP84 sample preserves ack flag");
+        require(number(unified.get("validTimeMs")) == 2000, "realistic AEP84 sample preserves validity window");
     }
 
     private static Map<String, Object> point(double x, double y, double z) {

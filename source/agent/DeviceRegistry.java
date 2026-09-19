@@ -30,6 +30,9 @@ public class DeviceRegistry {
         register(record("UAV-CQ-007", "无人机", "低空前视感知节点", "主路上空", 76, 0.44, 0.82, "ONLINE", 32,
             Arrays.asList("高空巡检", "快速侦察", "道路拥堵探测", "事故检测", "DroneMissionTopic", "TrafficRiskTopic"),
             Arrays.asList("DroneMissionTopic", "TrafficRiskTopic")));
+        register(record("UAV-AEP84-001", "无人机", "AEP84 标准互操作无人机", "任务空域", 71, 0.31, 0.80, "ONLINE", 27,
+            Arrays.asList("标准互操作", "状态上报", "协议归一化", "DroneMissionTopic", "TrafficRiskTopic"),
+            Arrays.asList("DroneMissionTopic", "TrafficRiskTopic", "runtime/agent/status")));
         register(record("RSU-SCHOOL-009", "RSU", "路侧事件发布节点", "学校路口", 100, 0.30, 0.92, "ONLINE", 18,
             Arrays.asList("路侧感知", "信号灯协同", "局部通信中继", "RoadSideUnitTopic", "EmergencyDispatchTopic"),
             Arrays.asList("RoadSideUnitTopic", "EmergencyDispatchTopic", "TrafficRiskTopic")));

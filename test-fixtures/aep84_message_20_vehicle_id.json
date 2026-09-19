@@ -1,0 +1,28 @@
+{
+  "messageType": "20",
+  "messageInstanceId": 1,
+  "streamId": 1,
+  "ackRequired": true,
+  "validTimeMs": 2000,
+  "latencyMs": 80,
+  "checksum": "0x9F31",
+  "vehicleId": "UA-101",
+  "cucsId": "CUCS-01",
+  "vsmId": "VSM-101",
+  "vehicleType": "UAV",
+  "vehicleSubtype": "MALE_UAV",
+  "owningId": "OWN-001",
+  "tailNumber": "N101",
+  "missionId": "MSN-001",
+  "atcCallSign": "CQ101",
+  "position": {
+    "lat": 29.592,
+    "lon": 106.568,
+    "alt_m": 120
+  },
+  "speedMps": 12.0,
+  "batteryPercent": 78.0,
+  "publishRateHz": 2.0,
+  "missionStatus": "EXECUTING",
+  "activeRoute": "route_B_emergency_bypass"
+}
