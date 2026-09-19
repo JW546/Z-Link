@@ -16,6 +16,7 @@ public class ConflictResolverTest {
         testIntentTensionConflict();
         testSafetyRiskConflictRejectsFastRoute();
         testEvidenceQualityConflict();
+        testAep84LowQualityStatusIsRejected();
         testAep84StatusEntersConflictResolver();
         testEndToEndPassengerSafetyScenario();
 
@@ -73,6 +74,38 @@ public class ConflictResolverTest {
 
         require(String.valueOf(result.get("conflictType")).contains("EVIDENCE_QUALITY_CONFLICT"), "conflictType includes evidence quality");
         require(rejectedContains(result, "route_C_elevated_detour"), "low-quality stale message is rejected");
+    }
+
+    private static void testAep84LowQualityStatusIsRejected() {
+        DDSMessage staleAep84 = new DDSMessage(
+            VirtualDDSMessageBus.TOPIC_DRONE_OBSERVATION,
+            "UAV-AEP84-001",
+            "ALL",
+            payload(
+                "role", "UAV",
+                "protocol", "AEP84-STANAG4586",
+                "route", "route_A_main_road",
+                "riskScore", 0.25,
+                "sourceTrust", 0.30,
+                "confidence", 0.30,
+                "packetLossRate", 0.70,
+                "ackRequired", false,
+                "validTimeMs", 100
+            ),
+            DDSQoS.bestEffort().withTimeToLiveMs(10L),
+            0.30,
+            System.currentTimeMillis() - 200L
+        );
+
+        Map<String, Object> result = new ConflictResolver().resolveMessages(Arrays.asList(
+            staleAep84,
+            message(VirtualDDSMessageBus.TOPIC_ROADSIDE_RISK_EVENT, "RSU-SCHOOL-009",
+                payload("route", "route_B_school_zone_slow_safe", "riskScore", 0.28, "confidence", 0.90))
+        ), "优先安全");
+
+        require(String.valueOf(result.get("conflictType")).contains("EVIDENCE_QUALITY_CONFLICT"),
+            "low-quality AEP84 status produces evidence quality conflict");
+        require(rejectedContains(result, "route_A_main_road"), "low-quality AEP84 status is rejected");
     }
 
     private static void testAep84StatusEntersConflictResolver() {
