@@ -25,11 +25,13 @@ public class FullClosedLoopScenarioTest {
         require(statusSources.contains("UAV-CQ-007"), "external DJI UAV status maps to logical UAV agent");
         require(statusSources.contains("CAR-CQ-001"), "external ROS2 vehicle status maps to logical ego car agent");
         require(statusSources.contains("PEER-CAR-031"), "external private JSON status maps to logical peer car agent");
+        require(statusSources.contains("UAV-AEP84-001"), "external AEP84 UAV status maps to logical AEP84 UAV agent");
 
         Set<String> protocols = protocolsFor(result);
         require(protocols.contains("DJI-STYLE"), "closed loop records DJI native protocol frame");
         require(protocols.contains("ROS2-DDS"), "closed loop records ROS2-DDS native protocol frame");
         require(protocols.contains("GENERIC-PRIVATE-JSON"), "closed loop records generic private JSON native protocol frame");
+        require(protocols.contains("AEP84-STANAG4586"), "closed loop records AEP84/STANAG4586 native protocol frame");
 
         System.out.println("[PASS] Full closed-loop scenario test passed.");
     }
