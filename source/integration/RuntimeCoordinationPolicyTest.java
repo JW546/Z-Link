@@ -35,6 +35,8 @@ public class RuntimeCoordinationPolicyTest {
         require(aep84RiskDecision.replanningTriggered(), "high-risk AEP84 status triggers dynamic replanning");
         require(String.valueOf(aep84RiskDecision.resolution.get("conflictType")).contains("SAFETY_RISK_CONFLICT"),
             "AEP84 high risk is reflected as safety risk conflict");
+        require(aep84RiskDecision.resolution.get("timelineEvent") instanceof Map<?, ?>,
+            "AEP84 replanning is represented in the explainable timeline");
 
         System.out.println("[PASS] Runtime coordination policy test passed.");
     }
