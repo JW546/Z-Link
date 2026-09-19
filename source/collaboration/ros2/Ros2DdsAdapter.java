@@ -147,7 +147,15 @@ public class Ros2DdsAdapter {
                 + ", speed_mps: " + doubleValue(payload.get("speed"), 0.0)
                 + ", battery_pct: " + doubleValue(payload.get("battery"), 0.0)
                 + ", publish_rate_hz: " + doubleValue(payload.get("rateHz"), 0.0)
-                + ", mission_status: '" + quote(value(payload, "missionStatus", "UNKNOWN")) + "'}";
+                + ", mission_status: '" + quote(value(payload, "missionStatus", "UNKNOWN"))
+                + "', link_id: '" + quote(value(payload, "linkId", ""))
+                + "', message_type: '" + quote(value(payload, "messageType", ""))
+                + "', message_instance_id: " + longValue(payload.get("messageInstanceId"), 0L)
+                + ", stream_id: " + longValue(payload.get("streamId"), 0L)
+                + ", ack_required: " + booleanValue(payload.get("ackRequired"), false)
+                + ", valid_time_ms: " + longValue(payload.get("validTimeMs"), 0L)
+                + ", latency_ms: " + doubleValue(payload.get("latencyMs"), 0.0)
+                + ", checksum: '" + quote(value(payload, "checksum", "")) + "'}";
         }
         if (LocalDDSBroker.TOPIC_FINAL_DECISION.equals(topic)) {
             return "{" + common + ", mission_id: '" + quote(value(payload, "missionId", "MSN-RUNTIME"))
@@ -186,7 +194,14 @@ public class Ros2DdsAdapter {
                 + "', protocol: '" + quote(value(payload, "protocol", "UNKNOWN"))
                 + "', unified_topic: '" + quote(value(payload, "unifiedTopic", ""))
                 + "', native_payload_json: '" + quote(value(payload, "native", ""))
-                + "', compatibility_note: 'adapter-normalized-native-frame'}";
+                + "', compatibility_note: 'adapter-normalized-native-frame'"
+                + ", message_type: '" + quote(value(payload, "messageType", ""))
+                + "', message_instance_id: " + longValue(payload.get("messageInstanceId"), 0L)
+                + ", stream_id: " + longValue(payload.get("streamId"), 0L)
+                + ", ack_required: " + booleanValue(payload.get("ackRequired"), false)
+                + ", valid_time_ms: " + longValue(payload.get("validTimeMs"), 0L)
+                + ", latency_ms: " + doubleValue(payload.get("latencyMs"), 0.0)
+                + ", checksum: '" + quote(value(payload, "checksum", "")) + "'}";
         }
         return "{" + common + ", mission_id: '" + quote(value(payload, "missionId", "MSN-RUNTIME"))
             + "', natural_language: '" + quote(value(payload, "naturalLanguage", ""))

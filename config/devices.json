@@ -8,6 +8,13 @@
       "vendor": "DJI-compatible"
     },
     {
+      "agentId": "UAV-AEP84-001",
+      "role": "UAV",
+      "protocol": "AEP84-STANAG4586",
+      "initialRoute": "route_B_emergency_bypass",
+      "vendor": "NATO STANAG 4586 / AEP-84"
+    },
+    {
       "agentId": "CAR-CQ-001",
       "role": "EGO_CAR",
       "protocol": "ROS2-DDS",

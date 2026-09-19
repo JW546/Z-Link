@@ -8,3 +8,10 @@ string protocol
 string unified_topic
 string native_payload_json
 string compatibility_note
+string message_type
+uint32 message_instance_id
+uint32 stream_id
+bool ack_required
+uint32 valid_time_ms
+float64 latency_ms
+string checksum

@@ -153,6 +153,14 @@ module urban {
     double battery_pct;
     double publish_rate_hz;
     IdString mission_status;
+    IdString link_id;
+    IdString message_type;
+    unsigned long message_instance_id;
+    unsigned long stream_id;
+    boolean ack_required;
+    unsigned long valid_time_ms;
+    double latency_ms;
+    IdString checksum;
   };
 
   struct ProtocolNativeFrame {
@@ -163,6 +171,13 @@ module urban {
     IdString unified_topic;
     ContractString native_payload_json;
     TextString compatibility_note;
+    IdString message_type;
+    unsigned long message_instance_id;
+    unsigned long stream_id;
+    boolean ack_required;
+    unsigned long valid_time_ms;
+    double latency_ms;
+    IdString checksum;
   };
 
   struct ConflictEvent {

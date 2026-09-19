@@ -151,6 +151,14 @@ Write-Host "[BASELINE] Run heterogeneous protocol adapter test"
 & $javaExe "-Dfile.encoding=UTF-8" -cp $classpath integration.HeterogeneousProtocolAdapterTest
 if ($LASTEXITCODE -ne 0) { throw "Heterogeneous protocol adapter test failed." }
 
+Write-Host "[BASELINE] Compile AEP84/STANAG4586 protocol adapter test"
+& $javacExe -encoding UTF-8 -sourcepath (Join-Path $repoRoot "source") -cp $classpath -d $outDir (Join-Path $repoRoot "source\integration\Aep84ProtocolAdapterTest.java")
+if ($LASTEXITCODE -ne 0) { throw "AEP84 protocol adapter test compile failed." }
+
+Write-Host "[BASELINE] Run AEP84/STANAG4586 protocol adapter test"
+& $javaExe "-Dfile.encoding=UTF-8" -cp $classpath integration.Aep84ProtocolAdapterTest
+if ($LASTEXITCODE -ne 0) { throw "AEP84 protocol adapter test failed." }
+
 Write-Host "[BASELINE] Compile ROS2 DDS adapter test"
 & $javacExe -encoding UTF-8 -sourcepath (Join-Path $repoRoot "source") -cp $classpath -d $outDir (Join-Path $repoRoot "source\integration\Ros2DdsAdapterTest.java")
 if ($LASTEXITCODE -ne 0) { throw "ROS2 DDS adapter test compile failed." }

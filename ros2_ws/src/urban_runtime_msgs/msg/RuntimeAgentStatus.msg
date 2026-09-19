@@ -13,3 +13,11 @@ float64 speed_mps
 float64 battery_pct
 float64 publish_rate_hz
 string mission_status
+string link_id
+string message_type
+uint32 message_instance_id
+uint32 stream_id
+bool ack_required
+uint32 valid_time_ms
+float64 latency_ms
+string checksum
