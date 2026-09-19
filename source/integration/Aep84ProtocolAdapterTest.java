@@ -15,6 +15,7 @@ public class Aep84ProtocolAdapterTest {
     public static void main(String[] args) throws Exception {
         testAep84NativeStatusNormalizesToRuntimeStatus();
         testAep84UnifiedStatusRoundTripsToNativeFrame();
+        testAep84CommandRoundTrip();
         testProtocolAdapterRegistryRecognizesAep84Profile();
         testRealisticAep84VehicleIdMessageFixture();
         System.out.println("[PASS] AEP84/STANAG4586 protocol adapter test passed.");
@@ -95,6 +96,25 @@ public class Aep84ProtocolAdapterTest {
         ProtocolAdapterRegistry registry = new ProtocolAdapterRegistry();
         registry.registerProfile(new DeviceProfile("UAV-AEP84-001", RuntimeAgentRole.UAV, "AEP84-STANAG4586", "route_B_emergency_bypass", "NATO STANAG 4586 / AEP-84"));
         require("AEP84-STANAG4586".equals(registry.adapterForAgent("UAV-AEP84-001").protocolName()), "registry resolves AEP84 adapter");
+    }
+
+    private static void testAep84CommandRoundTrip() {
+        Aep84DroneProtocolAdapter adapter = new Aep84DroneProtocolAdapter();
+        Map<String, Object> unified = new LinkedHashMap<String, Object>();
+        unified.put("missionId", "MSN-AEP84-001");
+        unified.put("action", "EXECUTE_ROUTE");
+        unified.put("route", "route_B_emergency_bypass");
+        unified.put("protocol", "AEP84-STANAG4586");
+
+        Map<String, Object> nativeCommand = adapter.toNativeCommand(unified);
+        require("49".equals(nativeCommand.get("messageType")), "AEP84 command maps to Vehicle Operating Mode message type");
+        require("MSN-AEP84-001".equals(nativeCommand.get("missionId")), "AEP84 command preserves mission id");
+        require("EXECUTE_ROUTE".equals(nativeCommand.get("action")), "AEP84 command preserves action");
+
+        Map<String, Object> roundTrip = adapter.fromNativeCommand(nativeCommand);
+        require("MSN-AEP84-001".equals(roundTrip.get("missionId")), "AEP84 command round-trip preserves mission id");
+        require("EXECUTE_ROUTE".equals(roundTrip.get("action")), "AEP84 command round-trip preserves action");
+        require("route_B_emergency_bypass".equals(roundTrip.get("route")), "AEP84 command round-trip preserves route");
     }
 
     private static void testRealisticAep84VehicleIdMessageFixture() throws Exception {

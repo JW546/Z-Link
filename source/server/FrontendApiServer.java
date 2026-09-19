@@ -1400,6 +1400,7 @@ public class FrontendApiServer {
             mapPoint("CAR-CQ-001", "CAR-CQ-001 自主决策车", "device", 36, 55, "deciding", originLat + 0.006, originLng + 0.012),
             mapPoint("CAR-CQ-002", "CAR-CQ-002 邻近无人车", "device", 28, 68, "advising", originLat + 0.001, originLng + 0.010),
             mapPoint("UAV-CQ-007", "UAV-CQ-007 低空前视", "device", 52, 31, "perceiving", originLat + 0.020, originLng + 0.022),
+            mapPoint("UAV-AEP84-001", "UAV-AEP84-001 AEP84 互操作无人机", "device", 58, 25, "interop", originLat + 0.026, originLng + 0.018),
             mapPoint("RSU-SCHOOL-009", "RSU-SCHOOL-009 路侧单元", "gateway", 61, 49, "road_event", originLat + 0.010, originLng + 0.032),
             mapPoint("CN-BACKBONE-CQ", "CN-BACKBONE-CQ 合规态势链路", "gateway", 42, 80, "context_only", originLat - 0.004, originLng + 0.018),
             mapPoint("destination", destLabel, "target", 78, 38, "tracking", destLat, destLng)
