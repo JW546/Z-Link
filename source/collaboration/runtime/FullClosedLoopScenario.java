@@ -1,6 +1,10 @@
 package collaboration.runtime;
 
+import com.google.gson.Gson;
+
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
@@ -84,25 +88,12 @@ public class FullClosedLoopScenario {
     }
 
     private Map<String, Object> aep84Status() {
-        Map<String, Object> status = new LinkedHashMap<String, Object>();
-        status.put("messageType", "20");
-        status.put("messageInstanceId", 310);
-        status.put("streamId", 7);
-        status.put("ackRequired", true);
-        status.put("validTimeMs", 1000);
-        status.put("latencyMs", 80);
-        status.put("checksum", "AEP84-CLOSED-LOOP-CHECKSUM");
-        status.put("vehicleId", "UAV-AEP84-REAL-001");
-        status.put("cucsId", "CUCS-CQ-001");
-        status.put("vsmId", "VSM-UAV-001");
-        status.put("vehicleType", "UAV");
-        status.put("position", geoPoint(29.61, 106.57, 120.0));
-        status.put("speedMps", 12.0);
-        status.put("batteryPercent", 78.0);
-        status.put("publishRateHz", 2.0);
-        status.put("missionStatus", "EXECUTING");
-        status.put("activeRoute", "route_C_aerial_scout");
-        return status;
+        try {
+            String json = new String(Files.readAllBytes(Paths.get("test-fixtures/aep84_message_20_vehicle_id.json")));
+            return new Gson().fromJson(json, Map.class);
+        } catch (IOException e) {
+            throw new IllegalStateException("AEP84 fixture is required for local closed-loop validation.", e);
+        }
     }
 
     private Map<String, Object> point(double x, double y, double z) {
@@ -113,11 +104,4 @@ public class FullClosedLoopScenario {
         return point;
     }
 
-    private Map<String, Object> geoPoint(double lat, double lon, double alt) {
-        Map<String, Object> point = new LinkedHashMap<String, Object>();
-        point.put("lat", lat);
-        point.put("lon", lon);
-        point.put("alt_m", alt);
-        return point;
-    }
 }
