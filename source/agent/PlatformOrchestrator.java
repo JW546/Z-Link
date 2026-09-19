@@ -416,13 +416,13 @@ public class PlatformOrchestrator {
     private List<String> publishersFor(String topicName) {
         if ("DroneMissionTopic".equals(topicName)) return Arrays.asList("PlatformOrchestrator", "CAR-CQ-001");
         if ("RoadSideUnitTopic".equals(topicName)) return Arrays.asList("RSU-SCHOOL-009");
-        if ("TrafficRiskTopic".equals(topicName)) return Arrays.asList("UAV-CQ-007", "RSU-SCHOOL-009");
+        if ("TrafficRiskTopic".equals(topicName)) return Arrays.asList("UAV-CQ-007", "UAV-AEP84-001", "RSU-SCHOOL-009");
         if ("VehicleStatusTopic".equals(topicName)) return Arrays.asList("CAR-CQ-001", "EMG-CQ-120");
         return Arrays.asList("PlatformOrchestrator");
     }
 
     private List<String> subscribersFor(String topicName) {
-        if ("DroneMissionTopic".equals(topicName)) return Arrays.asList("UAV-CQ-007");
+        if ("DroneMissionTopic".equals(topicName)) return Arrays.asList("UAV-CQ-007", "UAV-AEP84-001");
         if ("RoadSideUnitTopic".equals(topicName)) return Arrays.asList("CAR-CQ-001", "CN-BACKBONE-CQ");
         if ("TrafficRiskTopic".equals(topicName)) return Arrays.asList("CAR-CQ-001", "EMG-CQ-120", "CN-BACKBONE-CQ");
         if ("VehicleStatusTopic".equals(topicName)) return Arrays.asList("PlatformOrchestrator", "RSU-SCHOOL-009");

@@ -16,6 +16,7 @@ public class ConflictResolverTest {
         testIntentTensionConflict();
         testSafetyRiskConflictRejectsFastRoute();
         testEvidenceQualityConflict();
+        testAep84StatusEntersConflictResolver();
         testEndToEndPassengerSafetyScenario();
 
         System.out.println("[PASS] ConflictResolver test passed.");
@@ -74,6 +75,21 @@ public class ConflictResolverTest {
         require(rejectedContains(result, "route_C_elevated_detour"), "low-quality stale message is rejected");
     }
 
+    private static void testAep84StatusEntersConflictResolver() {
+        Map<String, Object> result = new ConflictResolver().resolveMessages(Arrays.asList(
+            message(VirtualDDSMessageBus.TOPIC_DRONE_OBSERVATION, "UAV-AEP84-001",
+                payload("role", "UAV", "protocol", "AEP84-STANAG4586", "route", "route_A_main_road",
+                    "riskScore", 0.36, "timeAdvantage", 0.96, "confidence", 0.90,
+                    "explanation", "AEP84 无人机状态报文参与路线建议")),
+            message(VirtualDDSMessageBus.TOPIC_ROADSIDE_RISK_EVENT, "RSU-SCHOOL-009",
+                payload("role", "RSU", "route", "route_B_school_zone_slow_safe", "riskScore", 0.23,
+                    "confidence", 0.93, "explanation", "路侧节点建议安全绕行"))
+        ), "尽快去医院，优先安全");
+
+        require(priorityContains(result, "UAV-AEP84-001"), "AEP84 status participates in conflict resolver priority order");
+        require(Boolean.TRUE.equals(result.get("hasConflict")), "AEP84 and RSU route divergence is detected");
+    }
+
     private static void testEndToEndPassengerSafetyScenario() {
         List<DDSMessage> messages = Arrays.asList(
             message(VirtualDDSMessageBus.TOPIC_DRONE_OBSERVATION, "UAV-CQ-007",
@@ -113,6 +129,17 @@ public class ConflictResolverTest {
         if (!(rejected instanceof List<?>)) return false;
         for (Object item : (List<?>) rejected) {
             if (item instanceof Map<?, ?> && route.equals(String.valueOf(((Map<?, ?>) item).get("route")))) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean priorityContains(Map<String, Object> result, String sourceId) {
+        Object priority = result.get("priorityOrder");
+        if (!(priority instanceof List<?>)) return false;
+        for (Object item : (List<?>) priority) {
+            if (item instanceof Map<?, ?> && sourceId.equals(String.valueOf(((Map<?, ?>) item).get("sourceId")))) {
                 return true;
             }
         }
