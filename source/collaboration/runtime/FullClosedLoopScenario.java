@@ -9,7 +9,7 @@ public class FullClosedLoopScenario {
         LocalDDSBroker broker = new LocalDDSBroker(0);
         broker.start();
         ProtocolAdapterRegistry registry = ProtocolAdapterRegistry.loadDefault();
-        CoordinatorAgent coordinator = new CoordinatorAgent("127.0.0.1", broker.port(), 3, timeoutMs);
+        CoordinatorAgent coordinator = new CoordinatorAgent("127.0.0.1", broker.port(), 4, timeoutMs);
         Thread coordinatorThread = thread("closed-loop-coordinator", coordinator);
 
         try {

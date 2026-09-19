@@ -12,7 +12,8 @@ public class RuntimeCoordinationPolicyTest {
         RuntimeCoordinationPolicy.RuntimeCoordinationDecision decision = policy.decide(
             status("CAR-CQ-001", "EGO_CAR", "route_A_main_road"),
             status("PEER-CAR-031", "PEER_CAR", "route_A_main_road"),
-            status("UAV-CQ-007", "UAV", "route_C_aerial_scout")
+            status("UAV-CQ-007", "UAV", "route_C_aerial_scout"),
+            status("UAV-AEP84-001", "UAV", "route_B_emergency_bypass")
         );
 
         require(decision.occupancyConflict, "policy detects route occupancy conflict");
@@ -23,6 +24,7 @@ public class RuntimeCoordinationPolicyTest {
             "policy keeps stable public strategy name");
         require(decision.resolution.containsKey("priorityOrder"), "policy exposes resolver priority order");
         require(decision.explanation().contains("Accepted"), "policy exposes resolver explanation");
+        require(priorityContains(decision, "UAV-AEP84-001"), "AEP84 status participates in runtime final route selection");
 
         System.out.println("[PASS] Runtime coordination policy test passed.");
     }
@@ -34,6 +36,17 @@ public class RuntimeCoordinationPolicyTest {
         payload.put("route", route);
         payload.put("confidence", 0.88);
         return RuntimeMessage.publish("runtime/agent/status", sourceId, payload);
+    }
+
+    private static boolean priorityContains(RuntimeCoordinationPolicy.RuntimeCoordinationDecision decision, String sourceId) {
+        Object priority = decision.resolution.get("priorityOrder");
+        if (!(priority instanceof java.util.List<?>)) return false;
+        for (Object item : (java.util.List<?>) priority) {
+            if (item instanceof Map<?, ?> && sourceId.equals(String.valueOf(((Map<?, ?>) item).get("sourceId")))) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static void require(boolean condition, String message) {

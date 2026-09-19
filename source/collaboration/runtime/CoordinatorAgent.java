@@ -76,11 +76,15 @@ public class CoordinatorAgent implements Runnable, Closeable {
         RuntimeMessage ego = latestStatus.get("CAR-CQ-001");
         RuntimeMessage peer = latestStatus.get("PEER-CAR-031");
         RuntimeMessage uav = latestStatus.get("UAV-CQ-007");
+        RuntimeMessage aep84 = latestStatus.get("UAV-AEP84-001");
         if (ego == null || peer == null || uav == null || finalDecision != null) {
             return;
         }
+        if (expectedDevices >= 4 && aep84 == null) {
+            return;
+        }
 
-        RuntimeCoordinationPolicy.RuntimeCoordinationDecision policyDecision = policy.decide(ego, peer, uav);
+        RuntimeCoordinationPolicy.RuntimeCoordinationDecision policyDecision = policy.decide(ego, peer, uav, aep84);
         String egoRoute = String.valueOf(ego.payload.get("route"));
         if (policyDecision.occupancyConflict) {
             Map<String, Object> conflict = new LinkedHashMap<String, Object>();

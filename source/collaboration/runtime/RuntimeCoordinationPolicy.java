@@ -22,11 +22,15 @@ public class RuntimeCoordinationPolicy {
     }
 
     public RuntimeCoordinationDecision decide(RuntimeMessage ego, RuntimeMessage peer, RuntimeMessage uav) {
+        return decide(ego, peer, uav, null);
+    }
+
+    public RuntimeCoordinationDecision decide(RuntimeMessage ego, RuntimeMessage peer, RuntimeMessage uav, RuntimeMessage aep84Uav) {
         String egoRoute = route(ego);
         String peerRoute = route(peer);
         boolean occupancyConflict = egoRoute.equals(peerRoute);
 
-        List<DDSMessage> evidence = Arrays.asList(
+        List<DDSMessage> evidence = new java.util.ArrayList<DDSMessage>(Arrays.asList(
             evidence(VirtualDDSMessageBus.TOPIC_DRONE_OBSERVATION, source(uav), payload(
                 "role", "UAV",
                 "route", route(uav),
@@ -57,7 +61,18 @@ public class RuntimeCoordinationPolicy {
                 "affectedRoute", occupancyConflict ? egoRoute : "",
                 "affectedRiskScore", occupancyConflict ? 0.82 : 0.30,
                 "explanation", "Coordinator candidate evidence favors green-wave detour when route occupancy conflicts"))
-        );
+        ));
+
+        if (aep84Uav != null) {
+            evidence.add(evidence(VirtualDDSMessageBus.TOPIC_DRONE_OBSERVATION, source(aep84Uav), payload(
+                "role", "UAV",
+                "protocol", "AEP84-STANAG4586",
+                "route", route(aep84Uav),
+                "riskScore", 0.28,
+                "timeAdvantage", 0.66,
+                "confidence", number(aep84Uav.payload, "confidence", 0.88),
+                "explanation", "AEP84 UAV provides standardized interop status for final route selection")));
+        }
 
         Map<String, Object> resolution = conflictResolver.resolveMessages(evidence,
             "urgent hospital-like coordination; safety first; avoid conflict");
