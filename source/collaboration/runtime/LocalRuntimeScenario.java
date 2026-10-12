@@ -11,12 +11,16 @@ public class LocalRuntimeScenario {
 
         List<Thread> threads = new ArrayList<Thread>();
         threads.add(thread("runtime-coordinator", coordinator));
+        // Devices resolve their subscriptions from the mission contract, not from a fixed list.
         threads.add(thread("runtime-uav", new RuntimeDeviceAgent("127.0.0.1", broker.port(),
-            RuntimeDeviceAgent.defaultConfig(RuntimeAgentRole.UAV, intervalMs, ticks))));
+            RuntimeDeviceAgent.defaultConfig(RuntimeAgentRole.UAV, intervalMs, ticks,
+                CoordinatorAgent.MISSION_TEXT))));
         threads.add(thread("runtime-ego-car", new RuntimeDeviceAgent("127.0.0.1", broker.port(),
-            RuntimeDeviceAgent.defaultConfig(RuntimeAgentRole.EGO_CAR, intervalMs, ticks))));
+            RuntimeDeviceAgent.defaultConfig(RuntimeAgentRole.EGO_CAR, intervalMs, ticks,
+                CoordinatorAgent.MISSION_TEXT))));
         threads.add(thread("runtime-peer-car", new RuntimeDeviceAgent("127.0.0.1", broker.port(),
-            RuntimeDeviceAgent.defaultConfig(RuntimeAgentRole.PEER_CAR, intervalMs, ticks))));
+            RuntimeDeviceAgent.defaultConfig(RuntimeAgentRole.PEER_CAR, intervalMs, ticks,
+                CoordinatorAgent.MISSION_TEXT))));
 
         try {
             for (Thread thread : threads) thread.start();

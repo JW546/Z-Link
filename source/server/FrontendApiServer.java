@@ -712,6 +712,16 @@ public class FrontendApiServer {
         response.put("defaultStatusRateHz", 2.0);
         response.put("supportedIntervalsMs", Arrays.asList(1000, 500, 200));
         response.put("communicationPattern", Arrays.asList("initial_intent_contract", "periodic_status_sync", "event_triggered_conflict_and_replan"));
+        response.put("subscriptionSource", "mission_contract");
+        response.put("missionContractText", collaboration.runtime.CoordinatorAgent.MISSION_TEXT);
+        response.put("contractSemanticTopics",
+            new java.util.ArrayList<String>(collaboration.runtime.ContractSubscriptionResolver
+                .semanticTopics(collaboration.runtime.CoordinatorAgent.MISSION_TEXT)));
+        response.put("contractResolvedSubscriptions",
+            collaboration.runtime.ContractSubscriptionResolver
+                .subscriptionsByRole(collaboration.runtime.CoordinatorAgent.MISSION_TEXT));
+        response.put("defaultSubscriptionsWhenNoContract",
+            collaboration.runtime.ContractSubscriptionResolver.DEFAULT_SUBSCRIPTIONS);
         response.put("agents", Arrays.asList(
             runtimeAgent("UAV-CQ-007", "UAV", "DJI-STYLE", "runtime/agent/status", "runtime/protocol/native_frame"),
             runtimeAgent("UAV-AEP84-001", "UAV", "AEP84-STANAG4586", "runtime/agent/status", "runtime/protocol/native_frame"),

@@ -65,6 +65,24 @@ public class LocalDDSBroker implements Closeable {
         }
     }
 
+    /**
+     * Runtime topic names that currently have at least one subscriber. Used to verify that a
+     * contract-resolved subscription actually reached the broker instead of being dropped.
+     */
+    public List<String> subscribedTopics() {
+        List<String> topics = new ArrayList<String>();
+        for (Map.Entry<String, Set<ClientSession>> entry : subscribers.entrySet()) {
+            Set<ClientSession> handlers = entry.getValue();
+            synchronized (handlers) {
+                if (!handlers.isEmpty()) {
+                    topics.add(entry.getKey());
+                }
+            }
+        }
+        Collections.sort(topics);
+        return topics;
+    }
+
     public void close() {
         running = false;
         try {

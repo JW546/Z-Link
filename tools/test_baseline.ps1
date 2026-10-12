@@ -127,6 +127,14 @@ Write-Host "[BASELINE] Run local runtime collaboration test"
 & $javaExe "-Dfile.encoding=UTF-8" -cp $classpath integration.LocalRuntimeCollaborationTest
 if ($LASTEXITCODE -ne 0) { throw "Local runtime collaboration test failed." }
 
+Write-Host "[BASELINE] Compile contract-driven subscription test"
+& $javacExe -encoding UTF-8 -sourcepath (Join-Path $repoRoot "source") -cp $classpath -d $outDir (Join-Path $repoRoot "source\integration\ContractDrivenSubscriptionTest.java")
+if ($LASTEXITCODE -ne 0) { throw "Contract-driven subscription test compile failed." }
+
+Write-Host "[BASELINE] Run contract-driven subscription test"
+& $javaExe "-Dfile.encoding=UTF-8" -cp $classpath integration.ContractDrivenSubscriptionTest
+if ($LASTEXITCODE -ne 0) { throw "Contract-driven subscription test failed." }
+
 Write-Host "[BASELINE] Compile runtime coordination policy test"
 & $javacExe -encoding UTF-8 -sourcepath (Join-Path $repoRoot "source") -cp $classpath -d $outDir (Join-Path $repoRoot "source\integration\RuntimeCoordinationPolicyTest.java")
 if ($LASTEXITCODE -ne 0) { throw "Runtime coordination policy test compile failed." }

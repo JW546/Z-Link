@@ -1,43 +1,69 @@
-# Local secrets and machine-specific configuration
-.env
-.env.*
-!.env.example
-frontend/amap.config.json
+# ==========================
+# Node frontend
+# ==========================
 
-# Dependencies and bundled runtimes
-node_modules/
 frontend/node_modules/
-/runtime/
+frontend/dist/
 
-# Build and generated output
-*.class
+# Environment files
+.env
+frontend/.env
+*.env
+
+# ==========================
+# Codex
+# ==========================
+
+.codex-*/
+.docx-script/
+
+# ==========================
+# Build
+# ==========================
+
+build/
 build-classes/
-utility-classes/
+target/
+*.class
+
+# ==========================
+# Generated
+# ==========================
+
 generated-java/
 generated-src/
 dsl-output/
+
+# ==========================
+# Runtime
+# ==========================
+
+outputs/
+results/
 artifacts/
-frontend/dist/
-frontend/tsconfig.tsbuildinfo
-ros2_ws/build/
-ros2_ws/install/
-ros2_ws/log/
-frontend.zip
-*.zip
-
-# Logs and temporary files
-*.log
 logs/
-~$*
-*.tmp
-*.temp
+runtime/
 
-# Machine-local RTI Connext native runtime copied by tools/real_dds_intent_test.ps1
-lib/nddsc.dll
-lib/nddsjava.dll
+# ==========================
+# IDE
+# ==========================
 
-# Editor and OS metadata
 .idea/
 .vscode/
-.DS_Store
-Thumbs.db
+
+# ==========================
+# Temporary
+# ==========================
+
+*.log
+~$*
+*.tmp
+# Map API config
+frontend/amap.config.json
+
+# TypeScript cache
+*.tsbuildinfo
+
+# ROS2 build
+ros2_ws/install/
+ros2_ws/log/

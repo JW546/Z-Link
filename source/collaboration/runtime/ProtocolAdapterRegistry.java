@@ -70,9 +70,18 @@ public class ProtocolAdapterRegistry {
     }
 
     public RuntimeAgentConfig runtimeConfig(String agentId, long intervalMs, int ticks) {
+        return runtimeConfig(agentId, new ArrayList<String>(), intervalMs, ticks);
+    }
+
+    /**
+     * Same as {@link #runtimeConfig(String, long, int)} but carries the contract-resolved
+     * subscriptions the device agent should listen on.
+     */
+    public RuntimeAgentConfig runtimeConfig(String agentId, List<String> subscriptions,
+                                            long intervalMs, int ticks) {
         DeviceProfile profile = profileForAgent(agentId);
         return new RuntimeAgentConfig(profile.agentId, profile.role, adapterForProtocol(profile.protocol),
-            profile.initialRoute, intervalMs, ticks);
+            profile.initialRoute, subscriptions, intervalMs, ticks);
     }
 
     public Map<String, Object> normalizeStatus(String protocol, Map<String, Object> nativeStatus) {

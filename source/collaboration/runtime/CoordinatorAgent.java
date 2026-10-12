@@ -7,6 +7,10 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
 public class CoordinatorAgent implements Runnable, Closeable {
+    public static final String MISSION_ID = "MSN-RUNTIME-LOCAL-DDS";
+    public static final String MISSION_TEXT =
+        "无人机先侦察 A 区，自车接近目标点，peer car 协同避让；发生路线冲突时动态重规划。";
+
     private final String host;
     private final int port;
     private final int expectedDevices;
@@ -64,9 +68,15 @@ public class CoordinatorAgent implements Runnable, Closeable {
 
     private void publishIntentContract() {
         Map<String, Object> payload = new LinkedHashMap<String, Object>();
-        payload.put("missionId", "MSN-RUNTIME-LOCAL-DDS");
-        payload.put("naturalLanguage", "无人机先侦察 A 区，自车接近目标点，peer car 协同避让；发生路线冲突时动态重规划。");
+        payload.put("missionId", MISSION_ID);
+        payload.put("naturalLanguage", MISSION_TEXT);
         payload.put("dslContract", "intent -> DSL task contract -> DDS topics -> multi-agent coordination");
+        // Structured part of the contract: the semantic topics this task asks for, and the runtime
+        // topics each role resolves to. Device agents build their subscriptions from these.
+        payload.put("semanticTopics",
+            new java.util.ArrayList<String>(ContractSubscriptionResolver.semanticTopics(MISSION_TEXT)));
+        payload.put("runtimeSubscriptionsByRole",
+            ContractSubscriptionResolver.subscriptionsByRole(MISSION_TEXT));
         payload.put("requiredAgents", "UAV-CQ-007,CAR-CQ-001,PEER-CAR-031,COORDINATOR-CQ-001");
         payload.put("defaultStatusIntervalMs", 500);
         client.publish(LocalDDSBroker.TOPIC_INTENT_CONTRACT, payload);
